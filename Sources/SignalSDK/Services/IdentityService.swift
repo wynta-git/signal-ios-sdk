@@ -28,6 +28,8 @@ internal final class IdentityService {
             completion(SDKResponse(success: false, error: "JSON serialization failed")); return
         }
 
+        let requestBodyStr = String(data: bodyData, encoding: .utf8)
+
         var req = URLRequest(url: url, timeoutInterval: Self.timeoutInterval)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -40,15 +42,17 @@ internal final class IdentityService {
         URLSession.shared.dataTask(with: req) { data, response, error in
             if let error = error {
                 Logger.error("identifyPlayer failed: \(error.localizedDescription)")
+                ApiLogger.fire(url: identifyUrl, method: "POST", requestBody: requestBodyStr, responseStatus: nil, responseBody: nil)
                 completion(SDKResponse(success: false, error: error.localizedDescription)); return
             }
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let responseBody = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
             Logger.log("setIdentity ← \(status) | \(identifyUrl)")
+            ApiLogger.fire(url: identifyUrl, method: "POST", requestBody: requestBodyStr, responseStatus: status, responseBody: responseBody)
             if (200...299).contains(status) {
                 completion(SDKResponse(success: true))
             } else {
-                let body = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-                completion(SDKResponse(success: false, error: "HTTP \(status): \(body)"))
+                completion(SDKResponse(success: false, error: "HTTP \(status): \(responseBody)"))
             }
         }.resume()
     }

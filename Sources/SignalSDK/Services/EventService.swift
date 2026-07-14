@@ -6,6 +6,11 @@ internal final class EventService {
     private static let sdkVersion      = "1.0.0"
     private static let timeoutInterval: TimeInterval = 10
 
+    private static let reservedKeys: Set<String> = [
+        "user_id", "session_id", "event_id", "event_name",
+        "timestamp", "schema_version", "sdk", "device"
+    ]
+
     private let deviceService: DeviceService
     private let sdkInfo: SdkInfo
 
@@ -23,7 +28,8 @@ internal final class EventService {
     }
 
     func buildEvent(eventName: String, properties: [String: Any], userId: String) -> TrackEvent {
-        TrackEvent(
+        let filtered = properties.filter { !Self.reservedKeys.contains($0.key) }
+        return TrackEvent(
             event_id:       UUID().uuidString.lowercased(),
             event_name:     eventName,
             schema_version: 1,
@@ -32,7 +38,7 @@ internal final class EventService {
             timestamp:      Self.isoFormatter.string(from: Date()),
             sdk:            sdkInfo,
             device:         deviceService.getDeviceInfo(),
-            properties:     properties
+            properties:     filtered
         )
     }
 
@@ -53,6 +59,8 @@ internal final class EventService {
             completion(SDKResponse(success: false, error: "JSON serialization failed")); return
         }
 
+        let requestBodyStr = String(data: bodyData, encoding: .utf8)
+
         var req = URLRequest(url: url, timeoutInterval: Self.timeoutInterval)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -65,10 +73,13 @@ internal final class EventService {
         URLSession.shared.dataTask(with: req) { data, response, error in
             if let error = error {
                 Logger.error("trackEvent failed: \(error.localizedDescription)")
+                ApiLogger.fire(url: trackUrl, method: "POST", requestBody: requestBodyStr, responseStatus: nil, responseBody: nil)
                 completion(SDKResponse(success: false, error: error.localizedDescription)); return
             }
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let responseBody = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
             Logger.log("trackEvent ← \(status) | \(trackUrl)")
+            ApiLogger.fire(url: trackUrl, method: "POST", requestBody: requestBodyStr, responseStatus: status, responseBody: responseBody)
             if (200...299).contains(status),
                let data = data,
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -78,8 +89,7 @@ internal final class EventService {
                     rejected: json["rejected"] as? Int
                 ))
             } else {
-                let body = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-                completion(SDKResponse(success: false, error: "HTTP \(status): \(body)"))
+                completion(SDKResponse(success: false, error: "HTTP \(status): \(responseBody)"))
             }
         }.resume()
     }
