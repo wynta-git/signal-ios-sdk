@@ -31,7 +31,7 @@ In Xcode:
 1. **File → Add Package Dependencies**
 2. Enter the repository URL:
    ```
-   https://github.com/signal-sdk/ios-sdk
+   https://github.com/wynta-git/signal-ios-sdk
    ```
 3. Select **Up to Next Major Version** → `1.0.0`
 4. Add `SignalSDK` to your app target
@@ -40,7 +40,7 @@ Or add it to your `Package.swift` (for framework targets):
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/signal-sdk/ios-sdk", from: "1.0.0")
+    .package(url: "https://github.com/wynta-git/signal-ios-sdk", from: "1.0.0")
 ],
 targets: [
     .target(name: "YourApp", dependencies: ["SignalSDK"])

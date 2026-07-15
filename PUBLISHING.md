@@ -9,9 +9,10 @@ ships their iOS SDK (`github.com/moengage/apple-sdk`, `pod 'MoEngage-iOS-SDK'`, 
 
 This mirrors the Android SDK's move to Maven Central (see `../androidsdk/PUBLISHING.md`).
 
-> **PLACEHOLDER URLs**: this doc and `SignalSDK.podspec` use `github.com/signal-sdk/ios-sdk`
-> as a stand-in. Replace it with the real public org/repo before the first `pod trunk push`
-> or the first public tag (see [One-time setup](#one-time-setup) step 1).
+> **Real repo (as of this doc)**: `github.com/wynta-git/signal-ios-sdk` — currently
+> **private** while we verify its contents before the first public release. See
+> `../androidsdk/PUBLISHING.md`'s troubleshooting section for why we verify before
+> flipping to public, not after.
 
 ---
 
@@ -45,7 +46,7 @@ This mirrors the Android SDK's move to Maven Central (see `../androidsdk/PUBLISH
   inside the `pam` Bitbucket repo, alongside the Android and React Native SDKs. Keep coding
   here exactly as you do now — nothing changes about day-to-day work.
 - **Release mirror**: a dedicated **public** GitHub repo — e.g.
-  `github.com/<org>/signal-ios-sdk` — containing **only** this folder's contents at its
+  `github.com/wynta-git/signal-ios-sdk` — containing **only** this folder's contents at its
   root (`Package.swift`, `Sources/`, `SignalSDK.podspec`, `LICENSE`).
 
 This split exists because SPM has no central registry: it resolves a package straight from
@@ -62,16 +63,18 @@ crosses into the public repo — only this SDK folder's contents do.
 
 ## One-time setup
 
-1. **Decide and create the real public repo** — e.g. `github.com/<org>/signal-ios-sdk`,
-   visibility **Public**. Replace every `github.com/signal-sdk/ios-sdk` placeholder in this
-   file, `SignalSDK.podspec`, and `INTEGRATION.md` with the real URL.
+1. **Create the repo private first, verify, then flip to public** — this is the one
+   lesson carried over from the Android SDK's publishing mistake (see
+   `../androidsdk/PUBLISHING.md`): a `git subtree split --prefix=SignalSDK/iossdk` was
+   verified locally (commit count, file scope, secret scan) *before* ever pushing, pushed
+   to `github.com/wynta-git/signal-ios-sdk` while **private**, then re-verified via a
+   fresh clone of the actual GitHub repo. Only flip to public after that fresh-clone
+   verification passes — never rely on the local check alone once something's been pushed.
 2. **Register a CocoaPods Trunk account** (one-time, per publishing maintainer):
    ```bash
    pod trunk register you@example.com 'Your Name' --description='signal-ios-sdk release machine'
    ```
    Confirm via the email link CocoaPods sends.
-3. **Update `INTEGRATION.md`** — its SPM install instructions still reference the
-   placeholder GitHub URL; point it at the real public URL from step 1.
 
 ---
 
@@ -116,7 +119,7 @@ cp -R PAM/SignalSDK/iossdk /tmp/signal-ios-sdk-release
 cd /tmp/signal-ios-sdk-release
 rm -rf .build   # drop any local build artifacts before committing
 git init -b main
-git remote add origin https://github.com/<org>/signal-ios-sdk.git
+git remote add origin https://github.com/wynta-git/signal-ios-sdk.git
 git add .
 git commit -m "Release 1.0.1"
 git push origin main   # add --force only for the very first push to an empty repo
@@ -164,7 +167,7 @@ model, just without credentials now that the repo is public.
 
 In Xcode → **File → Add Package Dependencies**:
 ```
-https://github.com/<org>/signal-ios-sdk.git
+https://github.com/wynta-git/signal-ios-sdk.git
 ```
 No credential prompt — the repo is public. Select version rule: **Up to Next Major** →
 `1.0.1`.
@@ -205,6 +208,9 @@ one trunk push covers both.
 - [ ] Run `pod lib lint SignalSDK.podspec --allow-warnings` locally — no errors
 - [ ] Commit changes in `pam` as usual
 - [ ] Sync this folder to the public repo (`git subtree push` or plain copy, see above)
+- [ ] Fresh-clone the public repo afterward and confirm no file outside the expected SDK
+      structure was ever committed (`git log --all --name-only`) — takes a minute, catches
+      exactly the mistake that happened with the Android SDK
 - [ ] Tag the public repo (`git tag <version> && git push origin main --tags`)
 - [ ] `pod trunk push SignalSDK.podspec --allow-warnings`
 - [ ] Add an entry to `CHANGELOG.md` in the public repo
