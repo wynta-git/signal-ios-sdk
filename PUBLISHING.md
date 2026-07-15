@@ -9,10 +9,11 @@ ships their iOS SDK (`github.com/moengage/apple-sdk`, `pod 'MoEngage-iOS-SDK'`, 
 
 This mirrors the Android SDK's move to Maven Central (see `../androidsdk/PUBLISHING.md`).
 
-> **Real repo (as of this doc)**: `github.com/wynta-git/signal-ios-sdk` — currently
-> **private** while we verify its contents before the first public release. See
-> `../androidsdk/PUBLISHING.md`'s troubleshooting section for why we verify before
-> flipping to public, not after.
+> **Real repo (as of this doc)**: `github.com/wynta-git/signal-ios-sdk` — **public**,
+> `1.0.0` tagged and released on both SPM and CocoaPods Trunk (owner `Wynta Software
+> <support@wynta.com>`). Verified clean (correct file scope, no secrets) via a fresh
+> clone both before and after flipping it public — see `../androidsdk/PUBLISHING.md`'s
+> troubleshooting section for why that verification step exists.
 
 ---
 
@@ -61,7 +62,7 @@ crosses into the public repo — only this SDK folder's contents do.
 
 ---
 
-## One-time setup
+## One-time setup (already done for this SDK — kept here for the next maintainer)
 
 1. **Create the repo private first, verify, then flip to public** — this is the one
    lesson carried over from the Android SDK's publishing mistake (see
@@ -70,11 +71,13 @@ crosses into the public repo — only this SDK folder's contents do.
    to `github.com/wynta-git/signal-ios-sdk` while **private**, then re-verified via a
    fresh clone of the actual GitHub repo. Only flip to public after that fresh-clone
    verification passes — never rely on the local check alone once something's been pushed.
-2. **Register a CocoaPods Trunk account** (one-time, per publishing maintainer):
+2. **CocoaPods Trunk account** — registered as `Wynta Software <support@wynta.com>`. To
+   add another maintainer's machine as a valid publishing session:
    ```bash
-   pod trunk register you@example.com 'Your Name' --description='signal-ios-sdk release machine'
+   pod trunk register support@wynta.com 'Wynta Software' --description='<your machine>'
    ```
-   Confirm via the email link CocoaPods sends.
+   Needs someone with access to that inbox to click the confirmation link CocoaPods sends.
+   Check current sessions/registered pods any time with `pod trunk me`.
 
 ---
 
@@ -98,31 +101,42 @@ private static let sdkVersion = "1.0.1"
 
 `iossdk` is a subfolder of the `pam` monorepo, not its own repo, so a plain `git push`
 won't work — you need to push only this folder's contents to the public repo's root.
-
-**Option A — `git subtree` (preserves history, recommended)**
+This is the exact process used for every release so far:
 
 ```bash
 cd PAM   # repo root
 
-# First time only — create the split branch:
-git subtree split --prefix=SignalSDK/iossdk -b ios-sdk-release
+# Rebuild the split branch fresh each release — don't reuse an old one, it won't
+# include your latest commits
+git branch -D clean-ios-sdk-export 2>/dev/null
+git subtree split --prefix=SignalSDK/iossdk -b clean-ios-sdk-export
 
-# Every publish:
-git subtree push --prefix=SignalSDK/iossdk release main
+# Verify locally BEFORE pushing anywhere — commit count, file scope, secret scan
+git log --oneline clean-ios-sdk-export
+git log --name-only --pretty=format: clean-ios-sdk-export | sort -u | grep -v "^$" | \
+  grep -viE "^(INTEGRATION\.md|PUBLISHING\.md|Package\.swift|SignalSDK\.podspec|LICENSE|Sources/|\.swiftpm/)"
+  # ^ must be blank — anything printed here is a file that doesn't belong in the public repo
+git log clean-ios-sdk-export -p 2>/dev/null | grep -niE "private_key|BEGIN PRIVATE KEY|mongodb://[a-zA-Z0-9_]+:"
+  # ^ must be blank — anything printed here is a leaked secret, stop and investigate
+
+# Only once both checks are clean, push it
+git push https://github.com/wynta-git/signal-ios-sdk.git clean-ios-sdk-export:main
 ```
 
-**Option B — plain copy (simpler, no history, fine for a low-traffic SDK)**
+### Step 2.5 — Re-verify from a fresh clone of the actual GitHub repo
+
+Don't skip this — the local branch and what's actually reachable on GitHub can differ
+(this is exactly what went wrong with the Android SDK). Clone fresh and repeat both
+checks from Step 2 against the real remote:
 
 ```bash
-rm -rf /tmp/signal-ios-sdk-release
-cp -R PAM/SignalSDK/iossdk /tmp/signal-ios-sdk-release
-cd /tmp/signal-ios-sdk-release
-rm -rf .build   # drop any local build artifacts before committing
-git init -b main
-git remote add origin https://github.com/wynta-git/signal-ios-sdk.git
-git add .
-git commit -m "Release 1.0.1"
-git push origin main   # add --force only for the very first push to an empty repo
+rm -rf /tmp/ios_sdk_verify
+git clone https://github.com/wynta-git/signal-ios-sdk.git /tmp/ios_sdk_verify
+cd /tmp/ios_sdk_verify
+git ls-remote https://github.com/wynta-git/signal-ios-sdk.git   # check for unexpected tags/branches
+git log --all --name-only --pretty=format: | sort -u | grep -v "^$" | \
+  grep -viE "^(INTEGRATION\.md|PUBLISHING\.md|Package\.swift|SignalSDK\.podspec|LICENSE|Sources/|\.swiftpm/)"
+git log --all -p 2>/dev/null | grep -niE "private_key|BEGIN PRIVATE KEY|mongodb://[a-zA-Z0-9_]+:"
 ```
 
 ### Step 3 — Tag and push
@@ -204,13 +218,12 @@ one trunk push covers both.
 
 - [ ] Bump `s.version` in `SignalSDK.podspec`
 - [ ] Bump `sdkVersion` in `EventService.swift`
-- [ ] Confirm URL placeholders in `SignalSDK.podspec` / `INTEGRATION.md` are real, not TODOs
 - [ ] Run `pod lib lint SignalSDK.podspec --allow-warnings` locally — no errors
 - [ ] Commit changes in `pam` as usual
-- [ ] Sync this folder to the public repo (`git subtree push` or plain copy, see above)
-- [ ] Fresh-clone the public repo afterward and confirm no file outside the expected SDK
-      structure was ever committed (`git log --all --name-only`) — takes a minute, catches
-      exactly the mistake that happened with the Android SDK
+- [ ] Rebuild the split branch fresh and verify it locally (commit count, file scope,
+      secret scan — Step 2)
+- [ ] Push to the public repo, then fresh-clone and re-verify from the real remote
+      (Step 2.5) — don't skip this even though it feels redundant with the local check
 - [ ] Tag the public repo (`git tag <version> && git push origin main --tags`)
 - [ ] `pod trunk push SignalSDK.podspec --allow-warnings`
 - [ ] Add an entry to `CHANGELOG.md` in the public repo

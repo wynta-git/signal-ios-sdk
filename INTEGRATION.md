@@ -24,19 +24,38 @@ This guide covers everything an iOS application needs to integrate the Signal SD
 
 ## 1. Installation
 
+There are two ways to install this SDK — **Swift Package Manager (SPM)** and
+**CocoaPods**. They both do the same thing (pull the SDK's code into your project); pick
+whichever matches how your project already installs its other dependencies. If you're not
+sure, look at your project: if you see a `Podfile`, use CocoaPods; otherwise use SPM.
+
+**You can also mix the two** — if your app already uses CocoaPods for everything else
+(e.g. Firebase, MoEngage), you don't have to convert the whole project just to add this
+SDK. You can add `SignalSDK` via SPM on its own, right alongside your existing CocoaPods
+setup, with zero changes to anything else. See the note at the end of this section.
+
 ### 1.1 Swift Package Manager (recommended)
 
 In Xcode:
 
-1. **File → Add Package Dependencies**
-2. Enter the repository URL:
+1. Open your project. **If your project already uses CocoaPods**, open the
+   **`.xcworkspace`** file (not the `.xcodeproj`) — CocoaPods generates this file, and it's
+   the one you should always have open once CocoaPods is involved.
+2. Go to the menu bar: **File → Add Package Dependencies...**
+3. A dialog box appears with a search field top-right. Paste in this URL and press Enter:
    ```
    https://github.com/wynta-git/signal-ios-sdk
    ```
-3. Select **Up to Next Major Version** → `1.0.0`
-4. Add `SignalSDK` to your app target
+4. Xcode will find the package and show version options. Leave it on the default
+   **"Up to Next Major Version"**, starting from `1.0.0`, then click **Add Package**.
+5. A second dialog asks which target(s) to add `SignalSDK` to. Check the box for your
+   main app target (e.g. the same target your app icon/name is under — for this project,
+   that's **TajRummy**). Click **Add Package** again to finish.
 
-Or add it to your `Package.swift` (for framework targets):
+That's it — no terminal commands needed for this path. Xcode downloads and builds the SDK
+automatically the next time you build your app.
+
+For a Swift Package (library) target instead of an app, add it to your `Package.swift`:
 
 ```swift
 dependencies: [
@@ -49,19 +68,29 @@ targets: [
 
 ### 1.2 CocoaPods
 
-Add to your `Podfile`:
+1. Open your project's `Podfile` in any text editor (it's a plain text file, usually at
+   your project's root, next to the `.xcodeproj`).
+2. Add this line inside your app's `target` block (near your other `pod '...'` lines):
+   ```ruby
+   pod 'SignalSDK', '~> 1.0'
+   ```
+3. Save the file, then open a terminal in that same folder and run:
+   ```bash
+   pod install
+   ```
+4. Once it finishes, close Xcode if it's open, and from then on always open the
+   **`.xcworkspace`** file — not the `.xcodeproj`. CocoaPods creates the `.xcworkspace`
+   specifically to include both your app and its pods; opening the `.xcodeproj` directly
+   will be missing the pods and fail to build.
 
-```ruby
-pod 'SignalSDK', '~> 1.0'
-```
+### Using both at once (CocoaPods for everything else, SPM just for this SDK)
 
-Then run:
-
-```bash
-pod install
-```
-
-Open the generated `.xcworkspace` (not `.xcodeproj`) going forward.
+This is a completely normal, well-supported setup — you don't need to pick only one for
+the whole project. If your `Podfile` already lists other pods (Firebase, MoEngage, etc.),
+just follow the SPM steps above (1.1) to add `SignalSDK` specifically, making sure you open
+the `.xcworkspace` (already created by your existing CocoaPods setup) before adding the
+package. Running `pod install` again later for your other pods won't remove or conflict
+with the SPM package — they're managed independently.
 
 ---
 
