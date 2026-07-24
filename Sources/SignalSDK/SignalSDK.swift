@@ -52,9 +52,13 @@ public final class SignalSDK {
     private var eventService:    EventService?
     private var identityService: IdentityService?
     private var lifecycleService: LifecycleService?
+    private var notificationInboxService: NotificationInboxService?
 
     // Stores notification userInfo from cold-start launch until identity is available
     private var pendingColdStartNotification: [AnyHashable: Any]?
+
+    // Strong reference to the currently-shown in-app popup — nothing else retains it.
+    private var currentPopup: InAppPopupWindow?
 
     private static let isoFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -96,13 +100,16 @@ public final class SignalSDK {
         let deviceService = DeviceService()
         let esvc  = EventService(deviceService: deviceService)
         let isvc  = IdentityService()
+        let nsvc  = NotificationInboxService()
         let lsvc  = LifecycleService(
-            getState: { [weak self] in self?.getState() ?? SDKState() },
-            emit:     { [weak self] eventName in self?.emitLifecycleEvent(eventName) }
+            getState:   { [weak self] in self?.getState() ?? SDKState() },
+            emit:       { [weak self] eventName in self?.emitLifecycleEvent(eventName) },
+            checkInbox: { [weak self] in self?.checkInbox() }
         )
 
         eventService     = esvc
         identityService  = isvc
+        notificationInboxService = nsvc
         lifecycleService = lsvc
 
         // Restore persisted APNs token so it's available before setIdentity is called
@@ -269,6 +276,15 @@ public final class SignalSDK {
                     self.trackNotificationInteraction(userInfo: pending)
                 }
             }
+
+            // Inbox is per-user — refetch whenever the identified user actually changes. This
+            // covers both the cold-start case (current.userId was nil) and a later login that
+            // switches from an anonymous id to a real user id. app_foreground never fires on a
+            // fresh launch, so the cold-start case isn't otherwise covered.
+            if result.success && userId != current.userId {
+                self.checkInbox()
+            }
+
             DispatchQueue.main.async { completion?(result) }
         }
     }
@@ -305,6 +321,18 @@ public final class SignalSDK {
         }
         precondition(!eventName.isEmpty, "eventName must not be empty")
 
+        // on_custom_event evaluation — purely local, no network dependency, so it runs
+        // regardless of whether the /events/track call below succeeds.
+        if !current.isInAppPopupVisible {
+            if let notification = TriggerEngine.findEligibleNotification(
+                notifications: current.notificationCache,
+                event: .customEvent(eventName: eventName),
+                handledIds: current.handledInAppNotificationIds
+            ) {
+                displayNotification(notification)
+            }
+        }
+
         guard let event = eventService?.buildEvent(eventName: eventName, properties: properties, userId: userId) else { return }
         Logger.log("sendEvent: \(eventName) | event_id=\(event.event_id)")
 
@@ -314,6 +342,48 @@ public final class SignalSDK {
 
         eventService?.trackEvent(event, clientId: clientId, clientSecret: clientSecret, baseUrl: baseUrl) { result in
             DispatchQueue.main.async { completion?(result) }
+        }
+    }
+
+    // ── Screens & In-App Notifications ───────────────────────────────────────
+
+    /// Call this whenever a screen becomes visible to the user. The SDK stores the current
+    /// screen, fires the `screen_viewed` analytics event, and evaluates any cached in-app
+    /// notifications targeting this screen — all without making a network request from this
+    /// call itself (the inbox is cached from the last `checkInbox()` fetch).
+    public func trackScreen(_ screenName: String) {
+        guard !screenName.isEmpty else {
+            Logger.log("trackScreen: screenName must not be empty")
+            return
+        }
+        let current = getState()
+        guard current.initialized else {
+            Logger.log("trackScreen skipped — SDK not initialized")
+            return
+        }
+
+        let referrer = current.currentScreen
+        updateState { s in
+            var s = s
+            s.previousScreen = current.currentScreen
+            s.currentScreen  = screenName
+            return s
+        }
+
+        if let userId = current.userId, !userId.isEmpty, current.clientId != nil, current.clientSecret != nil {
+            var props: [String: Any] = ["screen_name": screenName]
+            if let referrer { props["referrer"] = referrer }
+            trackDirectEvent("screen_viewed", properties: props, userId: userId)
+        }
+
+        guard !current.isInAppPopupVisible else { return } // don't stack a popup on rapid navigation
+
+        if let notification = TriggerEngine.findEligibleNotification(
+            notifications: current.notificationCache,
+            event: .screenLoad(screenName: screenName),
+            handledIds: current.handledInAppNotificationIds
+        ) {
+            displayNotification(notification)
         }
     }
 
@@ -343,12 +413,143 @@ public final class SignalSDK {
     private func emitLifecycleEvent(_ eventName: String) {
         let current = getState()
         guard current.initialized, let userId = current.userId, !userId.isEmpty else { return }
-        guard let event = eventService?.buildEvent(eventName: eventName, properties: [:], userId: userId) else { return }
-        Logger.log("Lifecycle event: \(eventName) | event_id=\(event.event_id)")
+        trackDirectEvent(eventName, properties: [:], userId: userId)
+    }
+
+    // Sends an event straight through EventService, bypassing sendEvent()'s on_custom_event
+    // trigger check — used for interaction/lifecycle events that must not themselves be able
+    // to re-trigger an in-app popup.
+    private func trackDirectEvent(_ eventName: String, properties: [String: Any], userId: String) {
+        let current = getState()
+        guard let event = eventService?.buildEvent(eventName: eventName, properties: properties, userId: userId) else { return }
+        Logger.log("trackDirectEvent: \(eventName) | event_id=\(event.event_id)")
         let clientId     = current.clientId!
         let clientSecret = current.clientSecret!
         let baseUrl      = current.baseUrl
         eventService?.trackEvent(event, clientId: clientId, clientSecret: clientSecret, baseUrl: baseUrl) { _ in }
+    }
+
+    /// Fetches the notification inbox, caches it for `trackScreen`/`sendEvent` trigger checks,
+    /// and — unless a popup is already showing — evaluates the on_session_start trigger and
+    /// displays the first eligible match. Called after the first identity is set, whenever the
+    /// identified user changes, and on every app_foreground.
+    private func checkInbox() {
+        let current = getState()
+        guard current.initialized,
+              let userId = current.userId, !userId.isEmpty,
+              let clientId = current.clientId,
+              let clientSecret = current.clientSecret else {
+            Logger.log("checkInbox skipped — no active identity")
+            return
+        }
+
+        notificationInboxService?.fetchInbox(
+            userId: userId, clientId: clientId, clientSecret: clientSecret, baseUrl: current.baseUrl
+        ) { [weak self] inbox, error in
+            guard let self else { return }
+            guard let inbox else {
+                Logger.error("checkInbox failed: \(error ?? "unknown error")")
+                return
+            }
+            Logger.log("checkInbox → \(inbox.notifications.count) notification(s)")
+            self.updateState { s in var s = s; s.notificationCache = inbox.notifications; return s }
+
+            let latest = self.getState()
+            guard !latest.isInAppPopupVisible else { return } // don't stack a popup on top of one already shown
+
+            if let notification = TriggerEngine.findEligibleNotification(
+                notifications: inbox.notifications,
+                event: .sessionStart,
+                handledIds: latest.handledInAppNotificationIds
+            ) {
+                self.displayNotification(notification)
+            }
+        }
+    }
+
+    // Shared by the session-start path (checkInbox) and the screen-load/custom-event paths
+    // (trackScreen, sendEvent) — marks the notification handled, guards further popups until
+    // this one is dismissed, and hands off to the native renderer.
+    private func displayNotification(_ notification: InboxNotification) {
+        updateState { s in
+            var s = s
+            s.handledInAppNotificationIds.append(notification.notification_id)
+            s.isInAppPopupVisible = true
+            return s
+        }
+
+        guard let imageUrl = notification.media?.image_url, !imageUrl.isEmpty else {
+            Logger.log("displayNotification: no image_url — dismissing \(notification.notification_id)")
+            updateState { s in var s = s; s.isInAppPopupVisible = false; return s }
+            return
+        }
+
+        guard currentPopup == nil else {
+            Logger.log("displayNotification: a popup is already showing — skipped \(notification.notification_id)")
+            return
+        }
+
+        let cta = notification.cta?.first
+        Logger.log("displayNotification: showing \(notification.notification_id)")
+
+        let popup = InAppPopupWindow()
+        currentPopup = popup
+        popup.present(
+            imageURL: imageUrl,
+            ctaAction: cta?.action ?? "dismiss",
+            ctaValue: cta?.value,
+            ctaLabel: cta?.label
+        ) { [weak self] interactionType, ctaLabel in
+            self?.onInAppInteraction(
+                type: interactionType,
+                notificationId: notification.notification_id,
+                campaignId: notification.campaign_id,
+                ctaLabel: ctaLabel
+            )
+        }
+    }
+
+    // Reported back by InAppPopupWindow for shown/clicked/dismissed. `shown` also marks the
+    // notification read; `clicked`/`dismissed` clear the popup-visible guard.
+    private func onInAppInteraction(type: String, notificationId: String, campaignId: String, ctaLabel: String?) {
+        let current = getState()
+        guard let userId = current.userId, !userId.isEmpty,
+              let clientId = current.clientId,
+              let clientSecret = current.clientSecret else { return }
+
+        Logger.log("onInAppInteraction: \(type) | notification=\(notificationId)")
+
+        switch type {
+        case "shown":
+            trackDirectEvent(
+                "in_app_notification_viewed",
+                properties: ["notification_id": notificationId, "campaign_id": campaignId],
+                userId: userId
+            )
+            notificationInboxService?.markNotificationsRead(
+                [notificationId], userId: userId, clientId: clientId, clientSecret: clientSecret, baseUrl: current.baseUrl
+            ) { error in
+                if let error {
+                    Logger.error("markNotificationsRead failed: \(error)")
+                }
+            }
+        case "clicked":
+            var props: [String: Any] = ["notification_id": notificationId, "campaign_id": campaignId]
+            if let ctaLabel { props["cta_label"] = ctaLabel }
+            trackDirectEvent("in_app_notification_clicked", properties: props, userId: userId)
+            updateState { s in var s = s; s.isInAppPopupVisible = false; return s }
+            currentPopup = nil
+        case "dismissed":
+            trackDirectEvent(
+                "in_app_notification_dismissed",
+                properties: ["notification_id": notificationId, "campaign_id": campaignId],
+                userId: userId
+            )
+            updateState { s in var s = s; s.isInAppPopupVisible = false; return s }
+            currentPopup = nil
+        default:
+            break
+        }
     }
 
     private func getState() -> SDKState {

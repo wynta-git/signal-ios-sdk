@@ -8,11 +8,17 @@ import UIKit
 internal final class LifecycleService {
     private let getState: () -> SDKState
     private let emit: (String) -> Void
+    private let checkInbox: () -> Void
     private var observers: [NSObjectProtocol] = []
 
-    init(getState: @escaping () -> SDKState, emit: @escaping (String) -> Void) {
+    init(
+        getState: @escaping () -> SDKState,
+        emit: @escaping (String) -> Void,
+        checkInbox: @escaping () -> Void = {}
+    ) {
         self.getState = getState
         self.emit = emit
+        self.checkInbox = checkInbox
     }
 
     func start() {
@@ -28,6 +34,7 @@ internal final class LifecycleService {
             guard s.initialized && s.appOpenTracked else { return }
             Logger.log("Lifecycle → app_foreground")
             self.emit("app_foreground")
+            self.checkInbox()
         })
 
         observers.append(center.addObserver(
