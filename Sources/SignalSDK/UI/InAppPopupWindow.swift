@@ -104,12 +104,17 @@ internal final class InAppPopupWindow: NSObject {
         let imageTap = UITapGestureRecognizer(target: self, action: #selector(handleImageTap))
         imageView.addGestureRecognizer(imageTap)
 
-        // Centered exactly on the card's corner — half in, half out — not clipped since
-        // it's a sibling of clipView (not a child of it).
+        // Centered exactly on the card's corner — half in, half out. Positioned in `root`'s
+        // coordinate space and added as a SIBLING of `card` (not a subview of it): UIKit's
+        // default hitTest rejects touches outside a view's own bounds before ever checking
+        // its subviews, so a close button placed half above card.bounds (y < 0) would only
+        // receive taps on its bottom half if it were a child of card. Matches the Android
+        // port's InAppPopupOverlay.kt, which places its close button as a sibling for the
+        // same reason.
         let closeSize: CGFloat = 32
         let closeButton = UIView(frame: CGRect(
-            x: cardWidth - closeSize / 2,
-            y: -closeSize / 2,
+            x: cardFrame.origin.x + cardWidth - closeSize / 2,
+            y: cardFrame.origin.y - closeSize / 2,
             width: closeSize, height: closeSize
         ))
         closeButton.backgroundColor = .white
@@ -118,6 +123,10 @@ internal final class InAppPopupWindow: NSObject {
         closeButton.layer.shadowOpacity = 0.3
         closeButton.layer.shadowOffset = CGSize(width: 0, height: 1)
         closeButton.layer.shadowRadius = 2
+        // No longer a child of `card`, so it must animate in on its own — it used to inherit
+        // card's fade/scale-in for free via view hierarchy alpha/transform propagation.
+        closeButton.transform = CGAffineTransform(scaleX: 0.92, y: 0.92)
+        closeButton.alpha = 0
 
         let barLength: CGFloat = 12
         let barThickness: CGFloat = 1.6
@@ -134,7 +143,7 @@ internal final class InAppPopupWindow: NSObject {
         let closeTap = UITapGestureRecognizer(target: self, action: #selector(handleClosePress))
         closeButton.addGestureRecognizer(closeTap)
         closeButton.isUserInteractionEnabled = true
-        card.addSubview(closeButton)
+        root.addSubview(closeButton)
 
         window.isHidden = false
 
@@ -146,6 +155,8 @@ internal final class InAppPopupWindow: NSObject {
             animations: {
                 card.alpha = 1
                 card.transform = .identity
+                closeButton.alpha = 1
+                closeButton.transform = .identity
             }
         )
 
