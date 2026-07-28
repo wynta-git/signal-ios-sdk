@@ -2,6 +2,15 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.3.0
+
+- Fixed the in-app popup's close button not registering taps on part of
+  its visible area. It was a subview of the image card, positioned half
+  above the card's own bounds — UIKit's default hitTest rejects touches
+  outside a view's own bounds before checking subviews, so only the
+  bottom half of the button actually worked. Now a sibling of the card
+  with its own entrance animation, matching the Android port.
+
 ## 1.2.0
 
 - Added in-app notification support: inbox fetch/cache, a trigger engine
