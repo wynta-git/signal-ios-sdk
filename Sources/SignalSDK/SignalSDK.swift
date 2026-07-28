@@ -25,7 +25,15 @@ import UserNotifications
 /// ```swift
 /// func application(_ application: UIApplication,
 ///                  didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-///     SignalSDK.shared.registerDeviceToken(deviceToken)
+///     SignalSDK.shared.registerDeviceToken(deviceToken)   // raw APNs token (fallback only)
+/// }
+///
+/// // If the app also integrates Firebase Messaging, register the real FCM token instead —
+/// // this is what the backend needs to actually deliver pushes via FCM:
+/// // MessagingDelegate:
+/// func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+///     guard let fcmToken else { return }
+///     SignalSDK.shared.registerFcmToken(fcmToken)
 /// }
 ///
 /// // UNUserNotificationCenterDelegate:
@@ -161,6 +169,12 @@ public final class SignalSDK {
     /// Call from `application(_:didRegisterForRemoteNotificationsWithDeviceToken:)`.
     /// Converts the raw token to a hex string, persists it to UserDefaults, and updates the
     /// backend via `setIdentity` if a user is already identified.
+    ///
+    /// - Note: This is the raw APNs device token, not an FCM registration token. Push delivery
+    ///   goes through FCM, which requires the actual FCM token — if the app also integrates
+    ///   Firebase Messaging, call `registerFcmToken(_:)` from
+    ///   `MessagingDelegate.messaging(_:didReceiveRegistrationToken:)` instead/as well, since
+    ///   that's the value the backend actually needs to deliver pushes.
     public func registerDeviceToken(_ deviceToken: Data) {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
         Logger.log("APNs token registered: \(token)")
@@ -169,6 +183,21 @@ public final class SignalSDK {
         let current = getState()
         if current.initialized, let userId = current.userId, !userId.isEmpty {
             setIdentity(IdentityPayload(userId: userId, fcmToken: token))
+        }
+    }
+
+    /// Call from `MessagingDelegate.messaging(_:didReceiveRegistrationToken:)` (Firebase
+    /// Messaging) with the actual FCM registration token. This is what the backend needs to
+    /// deliver pushes via FCM — the raw APNs token from `registerDeviceToken(_:)` is not a
+    /// valid substitute. Persists it and updates the backend via `setIdentity` if a user is
+    /// already identified.
+    public func registerFcmToken(_ fcmToken: String) {
+        Logger.log("FCM token registered: \(fcmToken)")
+        Storage.shared.set(StorageKey.apnsToken, fcmToken)
+        updateState { s in var s = s; s.fcmToken = fcmToken; return s }
+        let current = getState()
+        if current.initialized, let userId = current.userId, !userId.isEmpty {
+            setIdentity(IdentityPayload(userId: userId, fcmToken: fcmToken))
         }
     }
 
