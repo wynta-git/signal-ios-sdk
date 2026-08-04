@@ -272,6 +272,10 @@ public final class SignalSDK {
         // Always merge fcm_token into traits so it reaches the backend
         if let token = fcmToken { traitsMap["fcm_token"] = token }
 
+        // Always report the running platform and that this identity came from the client SDK
+        traitsMap["app_platform"] = "ios"
+        traitsMap["apk_installed_from_client"] = true
+
         // Persist APNs token so it survives app restarts
         if let token = fcmToken { Storage.shared.set(StorageKey.apnsToken, token) }
 
