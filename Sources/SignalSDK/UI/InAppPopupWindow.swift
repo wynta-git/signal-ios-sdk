@@ -8,6 +8,11 @@ internal typealias InAppInteractionHandler = (_ interactionType: String, _ ctaLa
 /// Native SDK's ios/WyntaInAppPopupWindow.m.
 internal final class InAppPopupWindow: NSObject {
     private var overlayWindow: UIWindow?
+    // The window that was key before we took over — restored on dismiss. Without this,
+    // the app's main window loses key status the moment the overlay becomes key, and
+    // nothing gives it back afterward, leaving the whole app unresponsive to touch once
+    // the popup is dismissed.
+    private weak var previousKeyWindow: UIWindow?
     private var webViewWindow: InAppWebViewWindow?
     private var ctaValue: String?
     private var ctaLabel: String?
@@ -25,12 +30,23 @@ internal final class InAppPopupWindow: NSObject {
         self.ctaLabel = ctaLabel
         self.interactionHandler = interactionHandler
 
-        guard let url = URL(string: imageURLString) else { return }
+        // Both early-return paths below must still resolve via interactionHandler —
+        // SignalSDK.swift only clears its popup-visible guard on a "clicked"/"dismissed"
+        // callback. Without this, a bad image URL or a failed download would leave it stuck
+        // true forever, silently blocking every later in-app popup for the rest of the
+        // process lifetime.
+        guard let url = URL(string: imageURLString) else {
+            interactionHandler("dismissed", nil)
+            return
+        }
 
         let task = URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
             let image = data.flatMap { UIImage(data: $0) }
             DispatchQueue.main.async {
-                guard let image else { return }
+                guard let image else {
+                    self?.interactionHandler?("dismissed", nil)
+                    return
+                }
                 self?.show(image: image)
             }
         }
@@ -145,7 +161,12 @@ internal final class InAppPopupWindow: NSObject {
         closeButton.isUserInteractionEnabled = true
         root.addSubview(closeButton)
 
-        window.isHidden = false
+        // makeKeyAndVisible (not just isHidden = false) is required for the overlay to
+        // reliably receive touches — a merely-visible non-key window can be bypassed by
+        // hit-testing in favor of the app's actual key window (see previousKeyWindow's
+        // comment for why dismiss() must give key status back afterward).
+        previousKeyWindow = scene?.windows.first(where: { $0.isKeyWindow })
+        window.makeKeyAndVisible()
 
         UIView.animate(withDuration: 0.18) { root.alpha = 1 }
         UIView.animate(
@@ -194,5 +215,8 @@ internal final class InAppPopupWindow: NSObject {
     private func dismiss() {
         overlayWindow?.isHidden = true
         overlayWindow = nil
+        // Restore key status to the app's real window — see previousKeyWindow's comment.
+        previousKeyWindow?.makeKeyAndVisible()
+        previousKeyWindow = nil
     }
 }
