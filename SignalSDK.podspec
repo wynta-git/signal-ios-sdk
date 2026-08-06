@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name                  = 'SignalSDK'
-  s.version               = '1.5.0'
+  s.version               = '1.5.1'
   s.summary               = 'Signal iOS SDK for player analytics and marketing automation.'
   s.description           = <<-DESC
     Signal iOS SDK provides player identity management, custom event tracking,
