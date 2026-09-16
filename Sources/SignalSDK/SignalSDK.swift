@@ -80,6 +80,13 @@ public final class SignalSDK {
     private static let prodBaseUrl = "https://api.wynta.com/api/v1"
     private static let qaBaseUrl   = "https://qa-app.fozilpartners.com/api/v1"
 
+    /// Notification category identifier for SDK-rendered campaign pushes. The host app's
+    /// Notification Content Extension target's Info.plist must set
+    /// `NSExtensionAttributes > UNNotificationExtensionCategory` to this same string so iOS
+    /// routes `branded`/`hero_banner` pushes to `PushNotificationContentViewController` when
+    /// expanded. Registered automatically by `requestNotificationPermission(completion:)`.
+    public static let pushCategoryIdentifier = "wynta_rich_push"
+
     private init() {}
 
     // ── Init ──────────────────────────────────────────────────────────────────
@@ -160,6 +167,14 @@ public final class SignalSDK {
     /// Request notification authorization (alert, sound, badge).
     /// Call once during onboarding or first launch.
     public func requestNotificationPermission(completion: @escaping (Bool, Error?) -> Void) {
+        let category = UNNotificationCategory(
+            identifier: Self.pushCategoryIdentifier,
+            actions: [],
+            intentIdentifiers: [],
+            options: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([category])
+
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             Logger.log("Notification permission: \(granted ? "granted" : "denied")")
             DispatchQueue.main.async { completion(granted, error) }
@@ -438,6 +453,9 @@ public final class SignalSDK {
         if let v = userInfo["template_id"]   as? String { props["template_id"]   = v }
         if let v = userInfo["deep_link"]     as? String { props["deep_link"]     = v }
         if let aid = actionId                           { props["action_id"]     = aid }
+        if let v = userInfo["notification_tap_type"]    as? String { props["notification_tap_type"]     = v }
+        if let v = userInfo["notification_tap_action_1"] as? String { props["notification_tap_action_1"] = v }
+        if let v = userInfo["notification_tap_action_2"] as? String { props["notification_tap_action_2"] = v }
 
         Logger.log("Push interaction: \(eventName) | campaign=\(campaignId)")
         sendEvent(eventName, properties: props)
