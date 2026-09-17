@@ -9,73 +9,142 @@ import UserNotificationsUI
 /// the extension's Info.plist `UNNotificationExtensionCategory` set to
 /// `SignalSDK.pushCategoryIdentifier` so iOS routes matching pushes here on expand.
 ///
-/// This is a functional first pass, not a pixel-match of the composer's template previews:
-/// `branded` gets an accent-colored header, `hero_banner` gets a full-bleed image (reusing the
-/// attachment `PushNotificationExtensionHelper` already downloaded — no second fetch),
-/// `standard` gets the same plain title/body layout as the OS default. The collapsed banner is
-/// always OS-standard regardless of what's drawn here — only the expanded/long-press view uses
-/// this UI, which is a platform constraint, not a bug.
+/// Mirrors the composer's three templates, matching the Android SDK's final rendering:
+///   - `standard`: plain title/body, no color, no image.
+///   - `branded`: the whole card is filled with `accentColorHex`, rounded corners, with an
+///     optional small `largeIconUrl` icon at the trailing edge.
+///   - `hero_banner`: the image fills the card edge-to-edge at its own aspect ratio (no fixed
+///     height, so it isn't cropped), with title/body overlaid in white on a bottom gradient
+///     scrim so text stays legible over any photo.
+/// The collapsed banner is always OS-standard regardless of what's drawn here — only the
+/// expanded/long-press view uses this UI, a platform constraint, not a bug.
 open class PushNotificationContentViewController: UIViewController, UNNotificationContentExtension {
 
-    private let headerView = UIView()
+    // Matches the Android SDK's rounded-branded-card radius.
+    private static let cardCornerRadius: CGFloat = 12
+    // Matches the Android SDK's hero_banner scrim height and hero-image height clamp.
+    private static let scrimHeight: CGFloat = 96
+    private static let minHeroHeight: CGFloat = 120
+    private static let maxHeroHeight: CGFloat = 220
+    private static let largeIconSize: CGFloat = 44
+
     private let imageView = UIImageView()
+    private let scrimView = UIView()
+    private let scrimLayer = CAGradientLayer()
+    private let largeIconView = UIImageView()
     private let titleLabel = UILabel()
     private let bodyLabel = UILabel()
+
     private var imageHeightConstraint: NSLayoutConstraint!
+    private var textStackNormalConstraints: [NSLayoutConstraint] = []
+    private var textStackOverlayConstraints: [NSLayoutConstraint] = []
 
     override open func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .clear
+        view.layer.cornerRadius = Self.cardCornerRadius
+        view.clipsToBounds = true
         buildLayout()
+    }
+
+    override open func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        scrimLayer.frame = scrimView.bounds
     }
 
     // MARK: - UNNotificationContentExtension
 
     open func didReceive(_ notification: UNNotification) {
         let payload = PushNotificationPayload.from(userInfo: notification.request.content.userInfo)
+        let template = payload?.template ?? "standard"
 
         titleLabel.text = payload?.title ?? notification.request.content.title
         bodyLabel.text  = payload?.body  ?? notification.request.content.body
 
-        headerView.backgroundColor = .clear
+        // Reset — didReceive can be called more than once for the same extension instance.
+        view.backgroundColor = .clear
         imageView.image = nil
+        largeIconView.image = nil
+        largeIconView.isHidden = true
+        scrimView.isHidden = true
         imageHeightConstraint.constant = 0
+        titleLabel.textColor = .label
+        bodyLabel.textColor = .secondaryLabel
+        NSLayoutConstraint.deactivate(textStackOverlayConstraints)
+        NSLayoutConstraint.activate(textStackNormalConstraints)
 
-        switch payload?.template {
+        switch template {
         case "branded":
+            // Whole-card fill, not just a header strip — matches the composer mockup and the
+            // Android SDK's rounded-branded-card fix (a colored header alone read as broken).
             if let hex = payload?.accentColorHex, let color = UIColor(hex: hex) {
-                headerView.backgroundColor = color
+                view.backgroundColor = color
             }
+            if let icon = attachedImage(in: notification, identifier: "large_icon") {
+                largeIconView.image = icon
+                largeIconView.isHidden = false
+            }
+
         case "hero_banner":
-            if let attachment = notification.request.content.attachments.first,
-               attachment.url.startAccessingSecurityScopedResource() {
-                defer { attachment.url.stopAccessingSecurityScopedResource() }
-                if let data = try? Data(contentsOf: attachment.url) {
-                    imageView.image = UIImage(data: data)
-                    imageHeightConstraint.constant = 200
-                }
+            guard let image = attachedImage(in: notification, identifier: "hero_image") else {
+                break // silent fallback to plain layout, per spec — no image, nothing to show
             }
+            imageView.image = image
+            scrimView.isHidden = false
+
+            // Sized to the image's own aspect ratio (clamped) instead of a fixed height, so a
+            // wide banner doesn't get center-cropped — same fix as the Android SDK's hero_banner
+            // height handling. iOS can measure the real card width directly, unlike RemoteViews.
+            let cardWidth = view.bounds.width > 0 ? view.bounds.width : 320
+            let aspectHeight = image.size.height > 0 ? cardWidth * (image.size.height / image.size.width) : Self.minHeroHeight
+            imageHeightConstraint.constant = min(max(aspectHeight, Self.minHeroHeight), Self.maxHeroHeight)
+
+            titleLabel.textColor = .white
+            bodyLabel.textColor = UIColor.white.withAlphaComponent(0.9)
+            NSLayoutConstraint.deactivate(textStackNormalConstraints)
+            NSLayoutConstraint.activate(textStackOverlayConstraints)
+
         default:
-            break // "standard" — plain title/body layout below
+            break // "standard" — plain title/body layout, nothing further to configure
         }
+
+        preferredContentSize = CGSize(
+            width: view.bounds.width,
+            height: view.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height
+        )
     }
 
     // MARK: - Layout
 
     private func buildLayout() {
-        headerView.translatesAutoresizingMaskIntoConstraints = false
         imageView.translatesAutoresizingMaskIntoConstraints = false
+        scrimView.translatesAutoresizingMaskIntoConstraints = false
+        largeIconView.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         bodyLabel.translatesAutoresizingMaskIntoConstraints = false
 
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
 
+        // Transparent-to-dark gradient behind the overlaid hero_banner text, so it stays
+        // legible over any photo — matches the Android SDK's wynta_hero_scrim drawable.
+        scrimLayer.colors = [
+            UIColor.clear.cgColor,
+            UIColor.black.withAlphaComponent(0.4).cgColor,
+            UIColor.black.withAlphaComponent(0.8).cgColor
+        ]
+        scrimLayer.locations = [0, 0.5, 1]
+        scrimView.layer.addSublayer(scrimLayer)
+        scrimView.isHidden = true
+
+        largeIconView.contentMode = .scaleAspectFill
+        largeIconView.clipsToBounds = true
+        largeIconView.layer.cornerRadius = 6
+        largeIconView.isHidden = true
+
         titleLabel.font = .boldSystemFont(ofSize: 15)
         titleLabel.numberOfLines = 2
 
         bodyLabel.font = .systemFont(ofSize: 13)
-        bodyLabel.textColor = .secondaryLabel
         bodyLabel.numberOfLines = 4
 
         let textStack = UIStackView(arrangedSubviews: [titleLabel, bodyLabel])
@@ -83,28 +152,56 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
         textStack.spacing = 4
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
-        headerView.addSubview(imageView)
-        view.addSubview(headerView)
+        view.addSubview(imageView)
+        imageView.addSubview(scrimView)
+        view.addSubview(largeIconView)
         view.addSubview(textStack)
 
         imageHeightConstraint = imageView.heightAnchor.constraint(equalToConstant: 0)
 
         NSLayoutConstraint.activate([
-            headerView.topAnchor.constraint(equalTo: view.topAnchor),
-            headerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-
-            imageView.topAnchor.constraint(equalTo: headerView.topAnchor),
-            imageView.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),
-            imageView.trailingAnchor.constraint(equalTo: headerView.trailingAnchor),
-            imageView.bottomAnchor.constraint(equalTo: headerView.bottomAnchor),
+            imageView.topAnchor.constraint(equalTo: view.topAnchor),
+            imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             imageHeightConstraint,
 
-            textStack.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 12),
+            scrimView.leadingAnchor.constraint(equalTo: imageView.leadingAnchor),
+            scrimView.trailingAnchor.constraint(equalTo: imageView.trailingAnchor),
+            scrimView.bottomAnchor.constraint(equalTo: imageView.bottomAnchor),
+            scrimView.heightAnchor.constraint(equalToConstant: Self.scrimHeight),
+
+            largeIconView.centerYAnchor.constraint(equalTo: textStack.centerYAnchor),
+            largeIconView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            largeIconView.widthAnchor.constraint(equalToConstant: Self.largeIconSize),
+            largeIconView.heightAnchor.constraint(equalToConstant: Self.largeIconSize),
+
             textStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            textStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             textStack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -12)
         ])
+
+        // "standard"/"branded" — text sits in normal document flow below the (zero-height,
+        // unless branded shows a large icon's row) image area, trailing edge clear of the icon.
+        textStackNormalConstraints = [
+            textStack.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 12),
+            textStack.trailingAnchor.constraint(lessThanOrEqualTo: largeIconView.leadingAnchor, constant: -12)
+        ]
+
+        // "hero_banner" — text overlays the bottom of the image, on top of the scrim, instead
+        // of flowing below it.
+        textStackOverlayConstraints = [
+            textStack.topAnchor.constraint(greaterThanOrEqualTo: imageView.topAnchor, constant: 12),
+            textStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16)
+        ]
+
+        NSLayoutConstraint.activate(textStackNormalConstraints)
+    }
+
+    private func attachedImage(in notification: UNNotification, identifier: String) -> UIImage? {
+        guard let attachment = notification.request.content.attachments.first(where: { $0.identifier == identifier }),
+              attachment.url.startAccessingSecurityScopedResource() else { return nil }
+        defer { attachment.url.stopAccessingSecurityScopedResource() }
+        guard let data = try? Data(contentsOf: attachment.url) else { return nil }
+        return UIImage(data: data)
     }
 }
 
