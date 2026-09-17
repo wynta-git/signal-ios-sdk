@@ -31,7 +31,9 @@ internal struct PushNotificationPayload {
         guard let title = string("title"), let body = string("body") else { return nil }
 
         return PushNotificationPayload(
-            template: string("template") ?? "standard",
+            // Normalized so "Branded"/"HERO_BANNER"/etc. from the composer still match —
+            // same case-sensitivity bug found and fixed on Android.
+            template: (string("template") ?? "standard").lowercased(),
             title: title,
             body: body,
             accentColorHex: string("accentColorHex"),
