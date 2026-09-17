@@ -37,6 +37,15 @@ public final class PushNotificationExtensionHelper {
     // Guard against a misconfigured/huge image stalling the extension's ~30s time budget.
     private static let maxImageBytes = 5 * 1024 * 1024
 
+    // Lets a host app's NSE route only Wynta campaign pushes here — e.g. one that also
+    // integrates another vendor's rich-push SDK (MoEngage, etc.) on the same contentHandler
+    // needs to know which pushes are ours *before* calling populate(), since a contentHandler
+    // can only be invoked once: call this first, and only fall through to the other vendor's
+    // handling when it returns false.
+    public static func isSignalSDKPush(userInfo: [AnyHashable: Any]) -> Bool {
+        PushNotificationPayload.from(userInfo: userInfo) != nil
+    }
+
     public static func populate(
         request: UNNotificationRequest,
         bestAttemptContent: UNMutableNotificationContent,
