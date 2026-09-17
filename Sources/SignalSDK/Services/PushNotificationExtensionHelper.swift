@@ -47,11 +47,24 @@ public final class PushNotificationExtensionHelper {
         bestAttemptContent.categoryIdentifier = SignalSDK.pushCategoryIdentifier
 
         guard
-            let payload = PushNotificationPayload.from(userInfo: bestAttemptContent.userInfo),
-            payload.template == "hero_banner",
-            let imageUrl = payload.imageUrl,
-            let url = URL(string: imageUrl)
+            let payload = PushNotificationPayload.from(userInfo: bestAttemptContent.userInfo)
         else {
+            contentHandler(bestAttemptContent)
+            return
+        }
+
+        // hero_banner's full-bleed image and branded's optional large icon are the only two
+        // images either template needs — download whichever one this payload calls for here,
+        // so the Content Extension can reuse the attachment instead of fetching it again.
+        let (attachmentId, imageUrlString): (String, String?) = {
+            switch payload.template {
+            case "hero_banner": return ("hero_image", payload.imageUrl)
+            case "branded": return ("large_icon", payload.largeIconUrl)
+            default: return ("", nil)
+            }
+        }()
+
+        guard let imageUrlString, let url = URL(string: imageUrlString) else {
             contentHandler(bestAttemptContent)
             return
         }
@@ -77,7 +90,7 @@ public final class PushNotificationExtensionHelper {
 
             do {
                 try FileManager.default.moveItem(at: location, to: destination)
-                let attachment = try UNNotificationAttachment(identifier: "hero_image", url: destination, options: nil)
+                let attachment = try UNNotificationAttachment(identifier: attachmentId, url: destination, options: nil)
                 bestAttemptContent.attachments = [attachment]
             } catch {
                 Logger.error("PushNotificationExtensionHelper: attachment failed: \(error)")
