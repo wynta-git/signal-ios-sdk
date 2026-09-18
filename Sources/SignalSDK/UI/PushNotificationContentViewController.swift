@@ -79,6 +79,12 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
             if let hex = payload?.accentColorHex, let color = UIColor(hex: hex) {
                 view.backgroundColor = color
             }
+            // Fixed black, not .label/.secondaryLabel — those are dynamic system colors that
+            // flip to white in dark mode, which reads as invisible against a light campaign-
+            // chosen background. The card's own background color is picked independently of the
+            // device's system theme, so its text can't rely on system-theme-aware colors either.
+            titleLabel.textColor = .black
+            bodyLabel.textColor = .black
             if let icon = attachedImage(in: notification, identifier: "large_icon") {
                 largeIconView.image = icon
                 largeIconView.isHidden = false
