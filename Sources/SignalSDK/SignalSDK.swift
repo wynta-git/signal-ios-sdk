@@ -164,16 +164,32 @@ public final class SignalSDK {
         pendingColdStartNotification = userInfo
     }
 
-    /// Request notification authorization (alert, sound, badge).
-    /// Call once during onboarding or first launch.
-    public func requestNotificationPermission(completion: @escaping (Bool, Error?) -> Void) {
+    /// Registers the category (`pushCategoryIdentifier`) that routes campaign pushes to a host
+    /// app's `WyntaNotificationContent`-style Content Extension on expand. Safe to call even if
+    /// the host app (or another SDK, e.g. MoEngage) also registers its own categories elsewhere —
+    /// this merges into whatever's already registered rather than replacing it, since
+    /// `UNUserNotificationCenter.setNotificationCategories` overwrites the *entire* set and two
+    /// independent callers each calling it with only their own category would clobber each other.
+    ///
+    /// Call this directly if the host app already owns its own authorization request flow (e.g.
+    /// alongside another push SDK) — `requestNotificationPermission` below calls this internally
+    /// too, so apps that only integrate SignalSDK's push handling don't need to call both.
+    public func registerPushCategory() {
         let category = UNNotificationCategory(
             identifier: Self.pushCategoryIdentifier,
             actions: [],
             intentIdentifiers: [],
             options: []
         )
-        UNUserNotificationCenter.current().setNotificationCategories([category])
+        UNUserNotificationCenter.current().getNotificationCategories { existing in
+            UNUserNotificationCenter.current().setNotificationCategories(existing.union([category]))
+        }
+    }
+
+    /// Request notification authorization (alert, sound, badge).
+    /// Call once during onboarding or first launch.
+    public func requestNotificationPermission(completion: @escaping (Bool, Error?) -> Void) {
+        registerPushCategory()
 
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             Logger.log("Notification permission: \(granted ? "granted" : "denied")")
