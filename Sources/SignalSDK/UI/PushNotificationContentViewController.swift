@@ -24,7 +24,12 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
     private static let cardCornerRadius: CGFloat = 12
     // Matches the Android SDK's hero_banner scrim height and hero-image height clamp.
     private static let scrimHeight: CGFloat = 96
-    private static let minHeroHeight: CGFloat = 120
+    // Wide marketing banners commonly run wider than 3:1 — a 120pt floor was forcing those
+    // taller than their natural aspect ratio, and since scaleAspectFill fills both dimensions,
+    // that extra height forced extra width to be cropped off the sides too (net effect: a
+    // zoomed-in, hard-to-make-out image). Lowered so typical wide banners render closer to their
+    // own aspect ratio instead of being stretched taller and cropped more.
+    private static let minHeroHeight: CGFloat = 90
     private static let maxHeroHeight: CGFloat = 220
     private static let largeIconSize: CGFloat = 44
 
