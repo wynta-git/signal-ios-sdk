@@ -3,7 +3,7 @@ import Foundation
 internal final class EventService {
 
     private static let sdkName         = "signal-ios-sdk"
-    private static let sdkVersion      = "1.7.2"
+    private static let sdkVersion      = "1.7.3"
     private static let timeoutInterval: TimeInterval = 10
 
     private static let reservedKeys: Set<String> = [
