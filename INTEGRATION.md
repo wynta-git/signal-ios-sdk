@@ -19,6 +19,13 @@ This guide covers everything an iOS application needs to integrate the Signal SD
 5. [Automatic Lifecycle Events](#5-automatic-lifecycle-events)
 6. [Full Lifecycle Example](#6-full-lifecycle-example)
 7. [API Reference](#7-api-reference)
+8. [Push Notification Templates](#8-push-notification-templates)
+   - [Notification Service Extension](#81-notification-service-extension)
+   - [Notification Content Extension](#82-notification-content-extension)
+   - [Payload contract](#83-payload-contract)
+   - [Registering the push category](#84-registering-the-push-category)
+   - [Sharing an NSE with another push vendor](#85-sharing-an-nse-with-another-push-vendor)
+   - [Tap handling & deep links](#86-tap-handling--deep-links)
 
 ---
 
@@ -444,6 +451,143 @@ public struct SDKResponse {
     public let error: String?   // error message if success = false
 }
 ```
+
+---
+
+## 8. Push Notification Templates
+
+The SDK renders campaign push notifications with custom UI — Branded gets an accent-colored card, Hero Banner gets a full-bleed image with an overlaid title/body. iOS has no equivalent of a single `handleRemoteMessage` call for this: **rich push requires two host-app extension targets**, both backed by reusable code shipped inside `SignalSDK` itself. There's no way around this — it's how APNs rich push works for every vendor (MoEngage, OneSignal, etc. all require the same two-extension pattern), not something specific to this SDK.
+
+| Extension | Purpose | Runs when |
+|---|---|---|
+| **Notification Service Extension (NSE)** | Downloads `imageUrl`/`largeIconUrl` and attaches them to the notification before it's shown | Every push, pre-display |
+| **Notification Content Extension** | Draws the actual custom UI (accent color, full-bleed image) | Only in the **expanded** state (long-press / pull-down) — the collapsed banner is always OS-standard, no SDK can change that |
+
+### 8.1 Notification Service Extension
+
+Add a new **Notification Service Extension** target in Xcode (File → New → Target → Notification Service Extension), link `SignalSDK` into that target's Frameworks and Libraries, then forward to the SDK's helper from its `didReceive`:
+
+```swift
+import UserNotifications
+import SignalSDK
+
+class NotificationService: UNNotificationServiceExtension {
+
+    var contentHandler: ((UNNotificationContent) -> Void)?
+    var bestAttemptContent: UNMutableNotificationContent?
+
+    override func didReceive(
+        _ request: UNNotificationRequest,
+        withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
+    ) {
+        self.contentHandler = contentHandler
+        bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
+        guard let bestAttemptContent else { return }
+
+        PushNotificationExtensionHelper.populate(
+            request: request,
+            bestAttemptContent: bestAttemptContent,
+            contentHandler: contentHandler
+        )
+    }
+
+    override func serviceExtensionTimeWillExpire() {
+        if let contentHandler, let bestAttemptContent {
+            contentHandler(bestAttemptContent)
+        }
+    }
+}
+```
+
+`populate` downloads the relevant image for the template (`imageUrl` for `hero_banner`, `largeIconUrl` for `branded`), attaches it, and sets `categoryIdentifier` so the OS routes to the Content Extension below. On any failure (timeout, bad URL, oversized image) it calls `contentHandler` with the content unchanged — the push still shows, just without the SDK's custom UI.
+
+### 8.2 Notification Content Extension
+
+Add a second new target: **Notification Content Extension**. In its Info.plist, set:
+
+```xml
+<key>NSExtension</key>
+<dict>
+    <key>NSExtensionAttributes</key>
+    <dict>
+        <key>UNNotificationExtensionCategory</key>
+        <string>wynta_rich_push</string>
+        <key>UNNotificationExtensionInitialContentSizeRatio</key>
+        <real>0.3</real>
+        <key>UNNotificationExtensionDefaultContentHidden</key>
+        <true/>
+    </dict>
+    <key>NSExtensionPrincipalClass</key>
+    <string>SignalSDK.PushNotificationContentViewController</string>
+</dict>
+```
+
+`UNNotificationExtensionDefaultContentHidden` is required — without it the OS's own default title/body header shows above the SDK's custom card, duplicating the text. `NSExtensionPrincipalClass` points directly at the SDK's `PushNotificationContentViewController` — no local subclass is needed, but `SignalSDK` **must also be linked into this target's** Frameworks and Libraries (a separate step from linking it into the NSE or the main app target — easy to miss).
+
+The category string (`wynta_rich_push` above) is arbitrary but must exactly match what's registered via `registerPushCategory()` ([8.4](#84-registering-the-push-category)) and what the NSE sets on `categoryIdentifier` — that match is how the OS decides to route an expanded notification to this extension at all.
+
+### 8.3 Payload contract
+
+| Field | Scope | Description |
+|---|---|---|
+| `template` | all | `"standard"` \| `"branded"` \| `"hero_banner"` (case-insensitive; unrecognized values fall back to `standard`) |
+| `title` / `body` | all | Required — the notification text |
+| `accentColorHex` | `branded` only | e.g. `"#3A4CE0"` — fills the card background, ignored for other templates |
+| `largeIconUrl` | `branded` only | Small icon shown alongside the card, ignored for other templates |
+| `imageUrl` | `hero_banner` only | Full-bleed image with an overlaid title/body; falls back to the `standard` layout if the download fails or the field is absent |
+| `notification_tap_type` | all | `"dismiss"` \| `"deeplink"` \| `"share"` \| `"call"` \| `"track_event"` — see [8.6](#86-tap-handling--deep-links) |
+| `notification_tap_action_1` / `notification_tap_action_2` | all | Opaque strings the app interprets based on `notification_tap_type` (e.g. a deep-link screen name) |
+
+### 8.4 Registering the push category
+
+`SignalSDK.shared.requestNotificationPermission()` registers the SDK's push category automatically as part of requesting permission. If your app manages its own `UNUserNotificationCenter.requestAuthorization` directly (common when another push vendor, e.g. MoEngage, already owns permission requests), call the registration step on its own instead — it merges into whatever categories are already registered rather than overwriting them:
+
+```swift
+SignalSDK.shared.registerPushCategory()
+```
+
+Call this once, anywhere after `initSDK`, on app launch — before the categories are needed to route an incoming rich push.
+
+### 8.5 Sharing an NSE with another push vendor
+
+Only one `NotificationService` extension target can exist per app, so if another push vendor's SDK already owns one, route through the same shared `contentHandler`. `PushNotificationExtensionHelper.isSignalSDKPush(userInfo:)` lets the NSE tell whether an incoming push belongs to this SDK before deciding which handler to invoke — since `contentHandler` can only be called once per push:
+
+```swift
+override func didReceive(
+    _ request: UNNotificationRequest,
+    withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
+) {
+    if PushNotificationExtensionHelper.isSignalSDKPush(userInfo: request.content.userInfo) {
+        // ...call PushNotificationExtensionHelper.populate(...) as in 8.1
+    } else {
+        // ...fall through to the other vendor's existing handling, unchanged
+    }
+}
+```
+
+### 8.6 Tap handling & deep links
+
+The SDK only special-cases `notification_tap_type == "dismiss"` — even then, iOS has no supported way to suppress a delivered notification's default tap from bringing the app to the foreground, so `dismiss` here just means the SDK won't treat the tap as a meaningful interaction. **Every other value is opaque to the SDK.** For all of them, `notification_tap_type`, `notification_tap_action_1`, and `notification_tap_action_2` are available on `response.notification.request.content.userInfo` in your `UNUserNotificationCenterDelegate`'s `didReceive response:` — the app is responsible for reading them and deciding what to do; the SDK does not navigate, open a dialer, or show a share sheet itself.
+
+A typical app has a single place where the target screen for a `"deeplink"` tap gets decided:
+
+```swift
+func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+) {
+    let userInfo = response.notification.request.content.userInfo
+    if let tapType = userInfo["notification_tap_type"] as? String,
+       tapType.caseInsensitiveCompare("deeplink") == .orderedSame,
+       let screen = userInfo["notification_tap_action_1"] as? String {
+        // ...route to `screen`, however your app's navigation is structured
+    }
+    completionHandler()
+}
+```
+
+`notification_tap_type`/`notification_tap_action_1`/`notification_tap_action_2` are also included automatically in the properties `SignalSDK` tracks for the tap interaction, so they're visible in analytics regardless of whether the app acts on them.
 
 ---
 
