@@ -2,6 +2,13 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.7.6
+
+- Added `text_color` to the push template payload contract: overrides the title/body text
+  color in the expanded Content Extension UI on all three templates (`standard`/`branded`/
+  `hero_banner`), unlike `bg_color`/`image_url`/`banner_url` which are each scoped to one
+  template. Ignored if invalid or absent, in which case each template's default color applies.
+
 ## 1.7.5
 
 - Custom push notification templates (`standard`/`branded`/`hero_banner`) now read the
