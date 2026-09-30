@@ -28,7 +28,10 @@ internal struct PushNotificationPayload {
             (userInfo[key] as? String)?.isEmpty == false ? (userInfo[key] as? String) : nil
         }
 
-        guard let title = string("title"), let body = string("body") else { return nil }
+        // The composer sends the description text as "content", not "body" -- "body" is kept as
+        // a fallback for any already-scheduled campaigns/older backend versions still using the
+        // old key.
+        guard let title = string("title"), let body = string("content") ?? string("body") else { return nil }
 
         return PushNotificationPayload(
             // Normalized so "Branded"/"HERO_BANNER"/etc. from the composer still match —
@@ -36,9 +39,11 @@ internal struct PushNotificationPayload {
             template: (string("template") ?? "standard").lowercased(),
             title: title,
             body: body,
-            accentColorHex: string("accentColorHex"),
-            largeIconUrl: string("largeIconUrl"),
-            imageUrl: string("imageUrl"),
+            // bg_color/image_url/banner_url are the current composer field names;
+            // accentColorHex/largeIconUrl/imageUrl kept as fallbacks for the same reason.
+            accentColorHex: string("bg_color") ?? string("accentColorHex"),
+            largeIconUrl: string("image_url") ?? string("largeIconUrl"),
+            imageUrl: string("banner_url") ?? string("imageUrl"),
             notificationTapType: string("notification_tap_type"),
             notificationTapAction1: string("notification_tap_action_1"),
             notificationTapAction2: string("notification_tap_action_2"),
