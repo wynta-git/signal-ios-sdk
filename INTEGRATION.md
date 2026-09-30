@@ -535,6 +535,7 @@ The category string (`wynta_rich_push` above) is arbitrary but must exactly matc
 | `bg_color` | `branded` only | e.g. `"#3A4CE0"` — fills the card background, ignored for other templates. `accentColorHex` is still accepted as a fallback |
 | `image_url` | `branded` only | Small icon shown alongside the card, ignored for other templates. `largeIconUrl` is still accepted as a fallback |
 | `banner_url` | `hero_banner` only | Full-bleed image with an overlaid title/body; falls back to the `standard` layout if the download fails or the field is absent. `imageUrl` is still accepted as a fallback |
+| `text_color` | all | e.g. `"#FFFFFF"` — overrides the title/body text color on all three templates in the expanded Content Extension UI (unlike `bg_color`/`image_url`/`banner_url`, not scoped to one template). Ignored if invalid/absent, in which case each template's default text color applies. Has no effect on the OS-standard collapsed banner |
 | `notification_tap_type` | all | `"dismiss"` \| `"deeplink"` \| `"share"` \| `"call"` \| `"track_event"` — see [8.6](#86-tap-handling--deep-links) |
 | `notification_tap_action_1` / `notification_tap_action_2` | all | Opaque strings the app interprets based on `notification_tap_type` (e.g. a deep-link screen name) |
 
