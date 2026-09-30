@@ -118,6 +118,14 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
             break // "standard" — plain title/body layout, nothing further to configure
         }
 
+        // Applied after the per-template switch, unlike accentColorHex/largeIconUrl/imageUrl,
+        // so text_color overrides the default title/body color on all three templates rather
+        // than being scoped to one.
+        if let hex = payload?.textColor, let color = UIColor(hex: hex) {
+            titleLabel.textColor = color
+            bodyLabel.textColor = color
+        }
+
         preferredContentSize = CGSize(
             width: view.bounds.width,
             height: view.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height

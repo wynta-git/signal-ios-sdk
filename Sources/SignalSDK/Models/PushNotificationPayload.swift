@@ -10,6 +10,9 @@ internal struct PushNotificationPayload {
     let accentColorHex: String?
     let largeIconUrl: String?
     let imageUrl: String?
+    // Overrides the title/body text color on all three templates — unlike accentColorHex/
+    // largeIconUrl/imageUrl, not scoped to a single template.
+    let textColor: String?
     let notificationTapType: String?
     let notificationTapAction1: String?
     let notificationTapAction2: String?
@@ -44,6 +47,7 @@ internal struct PushNotificationPayload {
             accentColorHex: string("bg_color") ?? string("accentColorHex"),
             largeIconUrl: string("image_url") ?? string("largeIconUrl"),
             imageUrl: string("banner_url") ?? string("imageUrl"),
+            textColor: string("text_color"),
             notificationTapType: string("notification_tap_type"),
             notificationTapAction1: string("notification_tap_action_1"),
             notificationTapAction2: string("notification_tap_action_2"),
