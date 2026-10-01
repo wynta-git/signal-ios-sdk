@@ -2,6 +2,12 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.7.8
+
+- Removed the dark gradient scrim behind `hero_banner`'s overlaid title/body text in the
+  expanded Content Extension UI — text now sits directly on the image with no background
+  treatment.
+
 ## 1.7.7
 
 - `notification_tap_type` is now lowercased at parse time and wherever it's read for analytics
