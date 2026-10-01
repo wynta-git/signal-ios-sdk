@@ -2,6 +2,13 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.7.7
+
+- `notification_tap_type` is now lowercased at parse time and wherever it's read for analytics
+  (`SignalSDK.trackNotificationInteraction`), matching the native Android SDK's normalization.
+  Previously a backend-sent `"Deeplink"`/`"DEEPLINK"` would pass through with its original
+  casing on iOS while Android always normalized to `"deeplink"`.
+
 ## 1.7.6
 
 - Added `text_color` to the push template payload contract: overrides the title/body text
