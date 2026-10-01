@@ -14,16 +14,13 @@ import UserNotificationsUI
 ///   - `branded`: the whole card is filled with `accentColorHex`, rounded corners, with an
 ///     optional small `largeIconUrl` icon at the trailing edge.
 ///   - `hero_banner`: the image fills the card edge-to-edge at its own aspect ratio (no fixed
-///     height, so it isn't cropped), with title/body overlaid in white on a bottom gradient
-///     scrim so text stays legible over any photo.
+///     height, so it isn't cropped), with title/body overlaid in white directly at the bottom.
 /// The collapsed banner is always OS-standard regardless of what's drawn here — only the
 /// expanded/long-press view uses this UI, a platform constraint, not a bug.
 open class PushNotificationContentViewController: UIViewController, UNNotificationContentExtension {
 
     // Matches the Android SDK's rounded-branded-card radius.
     private static let cardCornerRadius: CGFloat = 12
-    // Matches the Android SDK's hero_banner scrim height and hero-image height clamp.
-    private static let scrimHeight: CGFloat = 96
     // Wide marketing banners commonly run wider than 3:1 — a 120pt floor was forcing those
     // taller than their natural aspect ratio, and since scaleAspectFill fills both dimensions,
     // that extra height forced extra width to be cropped off the sides too (net effect: a
@@ -34,8 +31,6 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
     private static let largeIconSize: CGFloat = 44
 
     private let imageView = UIImageView()
-    private let scrimView = UIView()
-    private let scrimLayer = CAGradientLayer()
     private let largeIconView = UIImageView()
     private let titleLabel = UILabel()
     private let bodyLabel = UILabel()
@@ -49,11 +44,6 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
         view.layer.cornerRadius = Self.cardCornerRadius
         view.clipsToBounds = true
         buildLayout()
-    }
-
-    override open func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        scrimLayer.frame = scrimView.bounds
     }
 
     // MARK: - UNNotificationContentExtension
@@ -70,7 +60,6 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
         imageView.image = nil
         largeIconView.image = nil
         largeIconView.isHidden = true
-        scrimView.isHidden = true
         imageHeightConstraint.constant = 0
         titleLabel.textColor = .label
         bodyLabel.textColor = .secondaryLabel
@@ -100,7 +89,6 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
                 break // silent fallback to plain layout, per spec — no image, nothing to show
             }
             imageView.image = image
-            scrimView.isHidden = false
 
             // Sized to the image's own aspect ratio (clamped) instead of a fixed height, so a
             // wide banner doesn't get center-cropped — same fix as the Android SDK's hero_banner
@@ -136,24 +124,12 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
 
     private func buildLayout() {
         imageView.translatesAutoresizingMaskIntoConstraints = false
-        scrimView.translatesAutoresizingMaskIntoConstraints = false
         largeIconView.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         bodyLabel.translatesAutoresizingMaskIntoConstraints = false
 
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
-
-        // Transparent-to-dark gradient behind the overlaid hero_banner text, so it stays
-        // legible over any photo — matches the Android SDK's wynta_hero_scrim drawable.
-        scrimLayer.colors = [
-            UIColor.clear.cgColor,
-            UIColor.black.withAlphaComponent(0.4).cgColor,
-            UIColor.black.withAlphaComponent(0.8).cgColor
-        ]
-        scrimLayer.locations = [0, 0.5, 1]
-        scrimView.layer.addSublayer(scrimLayer)
-        scrimView.isHidden = true
 
         largeIconView.contentMode = .scaleAspectFill
         largeIconView.clipsToBounds = true
@@ -172,7 +148,6 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
         view.addSubview(imageView)
-        imageView.addSubview(scrimView)
         view.addSubview(largeIconView)
         view.addSubview(textStack)
 
@@ -183,11 +158,6 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
             imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             imageHeightConstraint,
-
-            scrimView.leadingAnchor.constraint(equalTo: imageView.leadingAnchor),
-            scrimView.trailingAnchor.constraint(equalTo: imageView.trailingAnchor),
-            scrimView.bottomAnchor.constraint(equalTo: imageView.bottomAnchor),
-            scrimView.heightAnchor.constraint(equalToConstant: Self.scrimHeight),
 
             largeIconView.centerYAnchor.constraint(equalTo: textStack.centerYAnchor),
             largeIconView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
@@ -205,8 +175,7 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
             textStack.trailingAnchor.constraint(lessThanOrEqualTo: largeIconView.leadingAnchor, constant: -12)
         ]
 
-        // "hero_banner" — text overlays the bottom of the image, on top of the scrim, instead
-        // of flowing below it.
+        // "hero_banner" — text overlays the bottom of the image instead of flowing below it.
         textStackOverlayConstraints = [
             textStack.topAnchor.constraint(greaterThanOrEqualTo: imageView.topAnchor, constant: 12),
             textStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16)
