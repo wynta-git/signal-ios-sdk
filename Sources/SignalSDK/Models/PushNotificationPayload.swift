@@ -48,7 +48,9 @@ internal struct PushNotificationPayload {
             largeIconUrl: string("image_url") ?? string("largeIconUrl"),
             imageUrl: string("banner_url") ?? string("imageUrl"),
             textColor: string("text_color"),
-            notificationTapType: string("notification_tap_type"),
+            // Lowercased to match the native Android SDK, where a "Dismiss"/"DEEPLINK" case
+            // variance from the backend shouldn't produce two different values downstream.
+            notificationTapType: string("notification_tap_type")?.lowercased(),
             notificationTapAction1: string("notification_tap_action_1"),
             notificationTapAction2: string("notification_tap_action_2"),
             campaignId: string("campaign_id") ?? string("wynta_campaign_id"),

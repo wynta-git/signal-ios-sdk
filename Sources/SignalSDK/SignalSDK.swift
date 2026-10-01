@@ -469,7 +469,9 @@ public final class SignalSDK {
         if let v = userInfo["template_id"]   as? String { props["template_id"]   = v }
         if let v = userInfo["deep_link"]     as? String { props["deep_link"]     = v }
         if let aid = actionId                           { props["action_id"]     = aid }
-        if let v = userInfo["notification_tap_type"]    as? String { props["notification_tap_type"]     = v }
+        // Lowercased to match the native Android SDK, which normalizes this at parse time
+        // (PushNotificationPayload.kt) before it ever reaches an analytics property.
+        if let v = userInfo["notification_tap_type"]    as? String { props["notification_tap_type"]     = v.lowercased() }
         if let v = userInfo["notification_tap_action_1"] as? String { props["notification_tap_action_1"] = v }
         if let v = userInfo["notification_tap_action_2"] as? String { props["notification_tap_action_2"] = v }
 
