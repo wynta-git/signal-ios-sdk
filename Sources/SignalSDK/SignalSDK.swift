@@ -68,6 +68,11 @@ public final class SignalSDK {
     // Strong reference to the currently-shown in-app popup — nothing else retains it.
     private var currentPopup: InAppPopupWindow?
 
+    // Registered by the host app to receive in-app message CTA taps whose action is
+    // "deep_link" — see InAppActionHandler's doc comment for why this is a direct callback
+    // rather than a userInfo-based hand-off like push's notification_tap_action_1.
+    private var inAppActionListener: InAppActionHandler?
+
     private static let isoFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale     = Locale(identifier: "en_US_POSIX")
@@ -411,6 +416,12 @@ public final class SignalSDK {
 
     // ── Screens & In-App Notifications ───────────────────────────────────────
 
+    /// Call once (e.g. from `application(_:didFinishLaunchingWithOptions:)`) to receive in-app
+    /// "deep_link" CTA taps.
+    public func setInAppActionListener(_ listener: InAppActionHandler?) {
+        inAppActionListener = listener
+    }
+
     /// Call this whenever a screen becomes visible to the user. The SDK stores the current
     /// screen, fires the `screen_viewed` analytics event, and evaluates any cached in-app
     /// notifications targeting this screen — all without making a network request from this
@@ -547,40 +558,38 @@ public final class SignalSDK {
             return s
         }
 
-        guard let imageUrl = notification.media?.image_url, !imageUrl.isEmpty else {
-            Logger.log("displayNotification: no image_url — dismissing \(notification.notification_id)")
-            updateState { s in var s = s; s.isInAppPopupVisible = false; return s }
-            return
-        }
-
         guard currentPopup == nil else {
             Logger.log("displayNotification: a popup is already showing — skipped \(notification.notification_id)")
             return
         }
 
-        let cta = notification.cta?.first
         Logger.log("displayNotification: showing \(notification.notification_id)")
 
         let popup = InAppPopupWindow()
         currentPopup = popup
-        popup.present(
-            imageURL: imageUrl,
-            ctaAction: cta?.action ?? "dismiss",
-            ctaValue: cta?.value,
-            ctaLabel: cta?.label
-        ) { [weak self] interactionType, ctaLabel in
+        popup.present(notification: notification) { [weak self] interactionType, ctaLabel, ctaAction, ctaValue in
             self?.onInAppInteraction(
                 type: interactionType,
                 notificationId: notification.notification_id,
                 campaignId: notification.campaign_id,
-                ctaLabel: ctaLabel
+                ctaLabel: ctaLabel,
+                ctaAction: ctaAction,
+                ctaValue: ctaValue
             )
         }
     }
 
     // Reported back by InAppPopupWindow for shown/clicked/dismissed. `shown` also marks the
-    // notification read; `clicked`/`dismissed` clear the popup-visible guard.
-    private func onInAppInteraction(type: String, notificationId: String, campaignId: String, ctaLabel: String?) {
+    // notification read; `clicked`/`dismissed` clear the popup-visible guard. ctaAction/ctaValue
+    // are only non-nil for "clicked" — used to hand "deep_link" taps to inAppActionListener.
+    private func onInAppInteraction(
+        type: String,
+        notificationId: String,
+        campaignId: String,
+        ctaLabel: String?,
+        ctaAction: String? = nil,
+        ctaValue: String? = nil
+    ) {
         let current = getState()
         guard let userId = current.userId, !userId.isEmpty,
               let clientId = current.clientId,
@@ -606,6 +615,9 @@ public final class SignalSDK {
             var props: [String: Any] = ["notification_id": notificationId, "campaign_id": campaignId]
             if let ctaLabel { props["cta_label"] = ctaLabel }
             trackDirectEvent("in_app_notification_clicked", properties: props, userId: userId)
+            if ctaAction == "deep_link" {
+                inAppActionListener?(ctaAction!, ctaValue, ctaLabel, notificationId, campaignId)
+            }
             updateState { s in var s = s; s.isInAppPopupVisible = false; return s }
             currentPopup = nil
         case "dismissed":

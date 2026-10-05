@@ -32,11 +32,20 @@ internal enum TriggerEngine {
         let match = notifications.first { notification in
             !handledIds.contains(notification.notification_id) &&
                 !isExpired(notification.expires_at) &&
-                !(notification.media?.image_url ?? "").isEmpty &&
+                hasRenderableContent(notification) &&
                 matchesTrigger(notification, event)
         }
         Logger.log("TriggerEngine.findEligibleNotification(\(event)) → \(match?.notification_id ?? "none")")
         return match
+    }
+
+    // Originally required an image unconditionally (the only layout was an image card). Now
+    // that templates can be title/body-driven, a notification is eligible with an image OR
+    // text — only one with neither has nothing to actually show.
+    private static func hasRenderableContent(_ notification: InboxNotification) -> Bool {
+        !(notification.media?.image_url ?? "").isEmpty ||
+            !(notification.title ?? "").isEmpty ||
+            !(notification.body ?? "").isEmpty
     }
 
     private static func isExpired(_ expiresAt: String?) -> Bool {
