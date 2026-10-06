@@ -2,6 +2,15 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.7.11
+
+- `full_screen`: when there's no image, the title/body/CTA block is now anchored near the top
+  (below the close button) instead of being vertically centered, which previously left a large
+  empty gap above the title.
+- `full_screen`: image height reduced from 45% to 35% of screen height.
+- Widened title→body and body→button spacing across `full_screen` and `pop_ups`/`bubble`.
+- Body text size increased from 14pt to 15pt.
+
 ## 1.7.10
 
 - `showTestInAppMessage` now supports a second (secondary) CTA button — disabled by default,
