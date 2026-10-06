@@ -170,16 +170,16 @@ internal final class InAppPopupWindow: NSObject {
             y += imageHeight + 12
         }
         if let title = notification.title, !title.isEmpty {
-            let label = measuredLabel(text: title, font: .boldSystemFont(ofSize: 17), color: UIColor(hex: "#1A1A1A")!, width: width, maxLines: 3)
+            let label = measuredLabel(text: title, font: .boldSystemFont(ofSize: 21), color: UIColor(hex: "#1A1A1A")!, width: width, maxLines: 3)
             label.frame.origin.y = y
             container.addSubview(label)
-            y += label.frame.height + 10
+            y += label.frame.height + 30
         }
         if let body = notification.body, !body.isEmpty {
-            let label = measuredLabel(text: body, font: .systemFont(ofSize: 15), color: UIColor(hex: "#6B6B6B")!, width: width, maxLines: 4)
+            let label = measuredLabel(text: body, font: .systemFont(ofSize: 18), color: UIColor(hex: "#6B6B6B")!, width: width, maxLines: 4)
             label.frame.origin.y = y
             container.addSubview(label)
-            y += label.frame.height + 18
+            y += label.frame.height + 38
         }
         let ctaList = (notification.cta ?? []).filter { !($0.label?.isEmpty ?? true) }
         for cta in ctaList {
