@@ -2,6 +2,21 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.7.9
+
+- Added in-app message templates: `template_type` now selects `full_screen` (covers the whole
+  screen), `pop_ups` (centered card over a dim scrim), or `bubble` (small card anchored to the
+  bottom, no scrim) — each showing image/title/body/CTA row only when present in the payload.
+  Any other/missing `template_type` falls back to the original fixed image-card layout, so
+  already-scheduled campaigns keep rendering unchanged.
+- Added `InAppActionHandler` / `SignalSDK.shared.setInAppActionListener(_:)` — the host app
+  registers this to receive in-app CTA taps whose action is `deep_link`, since the SDK has no
+  knowledge of the app's internal navigation. `external_url` CTAs continue to open in the SDK's
+  own in-app browser; `dismiss` just closes.
+- Added `SignalSDK.shared.showTestInAppMessage(...)` — a temporary testing aid that renders a
+  test in-app message directly, bypassing inbox fetch/trigger matching, for verifying the new
+  templates ahead of backend support for the new payload fields.
+
 ## 1.7.8
 
 - Removed the dark gradient scrim behind `hero_banner`'s overlaid title/body text in the
