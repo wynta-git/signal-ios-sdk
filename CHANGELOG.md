@@ -2,6 +2,13 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.7.12
+
+- `bubble`: fixed sitting flush against the home indicator safe area instead of floating above
+  it — position now accounts for `window.safeAreaInsets.bottom`.
+- `bubble`: base floating margin increased from 24pt to 28pt.
+- `bubble`: image height increased from 100pt to 120pt (was cropping too tight).
+
 ## 1.7.11
 
 - `full_screen`: when there's no image, the title/body/CTA block is now anchored near the top
