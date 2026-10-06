@@ -422,69 +422,6 @@ public final class SignalSDK {
         inAppActionListener = listener
     }
 
-    /// TEMPORARY — for testing in-app templates (full_screen/pop_ups/bubble) before the backend
-    /// supports the new payload fields. Renders a test in-app message directly, bypassing inbox
-    /// fetch/trigger matching entirely. Remove once real campaigns can be scheduled with these
-    /// fields.
-    ///
-    /// Example (hardcode a call to this somewhere reachable, e.g. a debug button):
-    /// ```swift
-    /// SignalSDK.shared.showTestInAppMessage(
-    ///     templateType: "pop_ups",
-    ///     title: "Welcome back!",
-    ///     body: "Here's a little something for you.",
-    ///     imageUrl: "https://example.com/banner.jpg",
-    ///     ctaLabel: "Claim Now",
-    ///     ctaAction: "deep_link",
-    ///     ctaValue: "wallet",
-    ///     ctaBackgroundColor: "#2F6BFF",
-    ///     // Omit secondCtaLabel to disable the second button entirely (the default).
-    ///     secondCtaLabel: "No thanks",
-    ///     secondCtaAction: "dismiss"
-    /// )
-    /// ```
-    public func showTestInAppMessage(
-        templateType: String, // "full_screen" | "pop_ups" | "bubble" | nil for the legacy layout
-        title: String? = nil,
-        body: String? = nil,
-        imageUrl: String? = nil,
-        ctaLabel: String? = nil,
-        ctaAction: String = "dismiss", // "deep_link" | "external_url" | "dismiss"
-        ctaValue: String? = nil,
-        ctaBackgroundColor: String? = nil,
-        // Second (secondary) button — disabled by default; pass secondCtaLabel to enable it.
-        secondCtaLabel: String? = nil,
-        secondCtaAction: String = "dismiss",
-        secondCtaValue: String? = nil,
-        secondCtaBackgroundColor: String? = nil,
-        closeButtonVisibility: String? = nil
-    ) {
-        var cta: [NotificationCta] = []
-        if let ctaLabel, !ctaLabel.isEmpty {
-            cta.append(NotificationCta(role: "primary", label: ctaLabel, action: ctaAction, value: ctaValue, cta_background_color: ctaBackgroundColor))
-        }
-        if let secondCtaLabel, !secondCtaLabel.isEmpty {
-            cta.append(NotificationCta(role: "secondary", label: secondCtaLabel, action: secondCtaAction, value: secondCtaValue, cta_background_color: secondCtaBackgroundColor))
-        }
-        let notification = InboxNotification(
-            notification_id: "test_\(Int(Date().timeIntervalSince1970 * 1000))",
-            campaign_id: "test_campaign",
-            variant_id: nil,
-            template_type: templateType,
-            render_engine: "native",
-            title: title,
-            body: body,
-            media: imageUrl.map { NotificationMedia(image_url: $0, background_color: nil, background_opacity: nil) },
-            cta: cta.isEmpty ? nil : cta,
-            close_button_visibility: closeButtonVisibility,
-            expires_at: nil,
-            trigger_type: nil,
-            target_screens: nil,
-            target_events: nil
-        )
-        displayNotification(notification)
-    }
-
     /// Call this whenever a screen becomes visible to the user. The SDK stores the current
     /// screen, fires the `screen_viewed` analytics event, and evaluates any cached in-app
     /// notifications targeting this screen — all without making a network request from this
