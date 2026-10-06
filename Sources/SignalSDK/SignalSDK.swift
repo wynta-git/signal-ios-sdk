@@ -437,7 +437,10 @@ public final class SignalSDK {
     ///     ctaLabel: "Claim Now",
     ///     ctaAction: "deep_link",
     ///     ctaValue: "wallet",
-    ///     ctaBackgroundColor: "#2F6BFF"
+    ///     ctaBackgroundColor: "#2F6BFF",
+    ///     // Omit secondCtaLabel to disable the second button entirely (the default).
+    ///     secondCtaLabel: "No thanks",
+    ///     secondCtaAction: "dismiss"
     /// )
     /// ```
     public func showTestInAppMessage(
@@ -449,10 +452,19 @@ public final class SignalSDK {
         ctaAction: String = "dismiss", // "deep_link" | "external_url" | "dismiss"
         ctaValue: String? = nil,
         ctaBackgroundColor: String? = nil,
+        // Second (secondary) button — disabled by default; pass secondCtaLabel to enable it.
+        secondCtaLabel: String? = nil,
+        secondCtaAction: String = "dismiss",
+        secondCtaValue: String? = nil,
+        secondCtaBackgroundColor: String? = nil,
         closeButtonVisibility: String? = nil
     ) {
-        let cta: [NotificationCta]? = ctaLabel.map {
-            [NotificationCta(role: "primary", label: $0, action: ctaAction, value: ctaValue, cta_background_color: ctaBackgroundColor)]
+        var cta: [NotificationCta] = []
+        if let ctaLabel {
+            cta.append(NotificationCta(role: "primary", label: ctaLabel, action: ctaAction, value: ctaValue, cta_background_color: ctaBackgroundColor))
+        }
+        if let secondCtaLabel {
+            cta.append(NotificationCta(role: "secondary", label: secondCtaLabel, action: secondCtaAction, value: secondCtaValue, cta_background_color: secondCtaBackgroundColor))
         }
         let notification = InboxNotification(
             notification_id: "test_\(Int(Date().timeIntervalSince1970 * 1000))",
@@ -463,7 +475,7 @@ public final class SignalSDK {
             title: title,
             body: body,
             media: imageUrl.map { NotificationMedia(image_url: $0, background_color: nil, background_opacity: nil) },
-            cta: cta,
+            cta: cta.isEmpty ? nil : cta,
             close_button_visibility: closeButtonVisibility,
             expires_at: nil,
             trigger_type: nil,
