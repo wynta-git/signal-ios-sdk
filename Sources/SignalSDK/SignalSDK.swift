@@ -68,15 +68,6 @@ public final class SignalSDK {
     // Strong reference to the currently-shown in-app popup — nothing else retains it.
     private var currentPopup: InAppPopupWindow?
 
-    // An on_session_start match that's been found but not yet displayed — deferred until the
-    // host app's next trackScreen() call. on_session_start fires as soon as identity is set
-    // (or on app_foreground), which on a typical app is still the splash screen; the host app
-    // then immediately navigates to its lobby/home screen — so showing immediately is liable
-    // to get torn down moments later by the app's own normal startup navigation, before the
-    // user ever sees it. trackScreen() is the same signal the SDK already requires host apps
-    // to call for on_screen_load triggers, so waiting for it needs no new integration step.
-    private var pendingSessionStartNotification: InboxNotification?
-
     // Registered by the host app to receive in-app message CTA taps whose action is
     // "deep_link" — see InAppActionHandler's doc comment for why this is a direct callback
     // rather than a userInfo-based hand-off like push's notification_tap_action_1.
@@ -462,16 +453,6 @@ public final class SignalSDK {
 
         guard !current.isInAppPopupVisible else { return } // don't stack a popup on rapid navigation
 
-        // A deferred on_session_start match takes priority over this call's own on_screen_load
-        // check — this screen becoming visible is exactly the "the app has settled" signal it
-        // was waiting for. Skip on_screen_load for this call so the two don't stack; the next
-        // trackScreen() call still evaluates on_screen_load normally.
-        if let deferred = pendingSessionStartNotification {
-            pendingSessionStartNotification = nil
-            displayNotification(deferred)
-            return
-        }
-
         if let notification = TriggerEngine.findEligibleNotification(
             notifications: current.notificationCache,
             event: .screenLoad(screenName: screenName),
@@ -555,15 +536,13 @@ public final class SignalSDK {
 
             let latest = self.getState()
             guard !latest.isInAppPopupVisible else { return } // don't stack a popup on top of one already shown
-            guard self.pendingSessionStartNotification == nil else { return } // already waiting on trackScreen()
 
             if let notification = TriggerEngine.findEligibleNotification(
                 notifications: inbox.notifications,
                 event: .sessionStart,
                 handledIds: latest.handledInAppNotificationIds
             ) {
-                Logger.log("checkInbox: on_session_start matched \(notification.notification_id) — deferring display until next trackScreen()")
-                self.pendingSessionStartNotification = notification
+                self.displayNotification(notification)
             }
         }
     }
