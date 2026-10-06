@@ -2,6 +2,12 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.7.10
+
+- `showTestInAppMessage` now supports a second (secondary) CTA button — disabled by default,
+  pass `secondCtaLabel` (plus `secondCtaAction`/`secondCtaValue`/`secondCtaBackgroundColor`) to
+  enable it. Matches the renderer's existing generic multi-CTA support.
+
 ## 1.7.9
 
 - Added in-app message templates: `template_type` now selects `full_screen` (covers the whole
