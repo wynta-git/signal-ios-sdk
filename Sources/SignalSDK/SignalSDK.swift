@@ -460,10 +460,10 @@ public final class SignalSDK {
         closeButtonVisibility: String? = nil
     ) {
         var cta: [NotificationCta] = []
-        if let ctaLabel {
+        if let ctaLabel, !ctaLabel.isEmpty {
             cta.append(NotificationCta(role: "primary", label: ctaLabel, action: ctaAction, value: ctaValue, cta_background_color: ctaBackgroundColor))
         }
-        if let secondCtaLabel {
+        if let secondCtaLabel, !secondCtaLabel.isEmpty {
             cta.append(NotificationCta(role: "secondary", label: secondCtaLabel, action: secondCtaAction, value: secondCtaValue, cta_background_color: secondCtaBackgroundColor))
         }
         let notification = InboxNotification(

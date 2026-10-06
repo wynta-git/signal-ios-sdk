@@ -181,7 +181,7 @@ internal final class InAppPopupWindow: NSObject {
             container.addSubview(label)
             y += label.frame.height + 18
         }
-        let ctaList = notification.cta ?? []
+        let ctaList = (notification.cta ?? []).filter { !($0.label?.isEmpty ?? true) }
         for cta in ctaList {
             let button = makeCtaButton(cta, width: width, resolver: resolver)
             button.frame.origin.y = y

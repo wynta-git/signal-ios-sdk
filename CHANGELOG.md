@@ -10,6 +10,8 @@ All notable changes to the Signal iOS SDK are documented here.
 - `full_screen`: image height reduced from 45% to 35% of screen height.
 - Widened title→body and body→button spacing across `full_screen` and `pop_ups`/`bubble`.
 - Body text size increased from 14pt to 15pt.
+- A CTA whose label is empty (not nil) is no longer rendered, matching the existing nil-label
+  behavior — applies to both `showTestInAppMessage` and the shared renderer.
 
 ## 1.7.10
 
