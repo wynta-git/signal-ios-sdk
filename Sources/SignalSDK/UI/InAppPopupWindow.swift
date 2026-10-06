@@ -173,13 +173,13 @@ internal final class InAppPopupWindow: NSObject {
             let label = measuredLabel(text: title, font: .boldSystemFont(ofSize: 17), color: UIColor(hex: "#1A1A1A")!, width: width, maxLines: 3)
             label.frame.origin.y = y
             container.addSubview(label)
-            y += label.frame.height + 6
+            y += label.frame.height + 10
         }
         if let body = notification.body, !body.isEmpty {
-            let label = measuredLabel(text: body, font: .systemFont(ofSize: 14), color: UIColor(hex: "#6B6B6B")!, width: width, maxLines: 4)
+            let label = measuredLabel(text: body, font: .systemFont(ofSize: 15), color: UIColor(hex: "#6B6B6B")!, width: width, maxLines: 4)
             label.frame.origin.y = y
             container.addSubview(label)
-            y += label.frame.height + 12
+            y += label.frame.height + 18
         }
         let ctaList = notification.cta ?? []
         for cta in ctaList {
@@ -242,13 +242,21 @@ internal final class InAppPopupWindow: NSObject {
 
         let padding: CGFloat = 24
         let contentWidth = root.bounds.width - padding * 2
-        let imageHeight = root.bounds.height * 0.45
+        let imageHeight = root.bounds.height * 0.35
 
         let content = buildContentStack(
             notification: notification, image: image, width: contentWidth,
             imageHeight: imageHeight, imageCornerRadius: 0, resolver: resolver
         )
-        content.center = CGPoint(x: root.bounds.midX, y: root.bounds.midY)
+        // With an image, the 45%-height image anchors the block near the top and centering the
+        // whole thing reads as balanced. Without one, centering leaves a large empty gap above
+        // the title — anchor to the top (clearing the close button) instead in that case.
+        if image != nil {
+            content.center = CGPoint(x: root.bounds.midX, y: root.bounds.midY)
+        } else {
+            content.center.x = root.bounds.midX
+            content.frame.origin.y = window.safeAreaInsets.top + 80
+        }
         root.addSubview(content)
 
         if showsCloseButton(notification) {
