@@ -116,8 +116,20 @@ internal final class NotificationInboxService {
         return InboxNotification(
             notification_id: json["notification_id"] as? String ?? "",
             campaign_id: json["campaign_id"] as? String ?? "",
-            media: mediaDict.map { NotificationMedia(image_url: $0["image_url"] as? String) },
+            variant_id: json["variant_id"] as? String,
+            template_type: (json["template_type"] as? String)?.lowercased(),
+            render_engine: (json["render_engine"] as? String)?.lowercased(),
+            title: json["title"] as? String,
+            body: json["body"] as? String,
+            media: mediaDict.map {
+                NotificationMedia(
+                    image_url: $0["image_url"] as? String,
+                    background_color: $0["background_color"] as? String,
+                    background_opacity: $0["background_opacity"] as? String
+                )
+            },
             cta: ctaArray?.map(parseNotificationCta),
+            close_button_visibility: json["close_button_visibility"] as? String,
             expires_at: json["expires_at"] as? String,
             trigger_type: json["trigger_type"] as? String,
             target_screens: json["target_screens"] as? [String],
@@ -130,7 +142,8 @@ internal final class NotificationInboxService {
             role: json["role"] as? String,
             label: json["label"] as? String,
             action: json["action"] as? String ?? "dismiss",
-            value: json["value"] as? String
+            value: json["value"] as? String,
+            cta_background_color: json["cta_background_color"] as? String
         )
     }
 }
