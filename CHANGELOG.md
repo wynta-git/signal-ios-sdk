@@ -2,6 +2,12 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.8.0
+
+- Title size increased 17pt -> 21pt, body size 15pt -> 18pt.
+- Title->body spacing +20pt (10 -> 30), body->button spacing +20pt (18 -> 38) — shared across
+  `full_screen` and `pop_ups`/`bubble`.
+
 ## 1.7.12
 
 - `bubble`: fixed sitting flush against the home indicator safe area instead of floating above
