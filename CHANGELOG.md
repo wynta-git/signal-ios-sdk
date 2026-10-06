@@ -2,6 +2,13 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.8.1
+
+- Removed `showTestInAppMessage` — it was always a dev-only bypass (skips inbox fetch/trigger
+  matching entirely) for testing in-app templates ahead of backend support. Real in-app messages
+  are driven by backend `trigger_type`/`target_screens`/`target_events` config, evaluated
+  automatically by `trackScreen()`/`sendEvent()` against the cached inbox.
+
 ## 1.8.0
 
 - Title size increased 17pt -> 21pt, body size 15pt -> 18pt.
