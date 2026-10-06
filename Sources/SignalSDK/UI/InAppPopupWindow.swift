@@ -289,7 +289,7 @@ internal final class InAppPopupWindow: NSObject {
 
         let content = buildContentStack(
             notification: notification, image: image, width: contentWidth,
-            imageHeight: bubble ? 100 : 140, imageCornerRadius: 10, resolver: resolver
+            imageHeight: bubble ? 120 : 140, imageCornerRadius: 10, resolver: resolver
         )
         content.frame.origin = CGPoint(x: padding, y: padding)
         let cardHeight = content.frame.maxY + padding
@@ -321,7 +321,10 @@ internal final class InAppPopupWindow: NSObject {
         }
 
         if bubble {
-            card.center = CGPoint(x: root.bounds.midX, y: root.bounds.height - 24 - card.frame.height / 2)
+            // Float above the home indicator / gesture area, not flush against the raw window
+            // edge — `root.bounds` is the full window, not inset by the safe area.
+            let bottomInset: CGFloat = window.safeAreaInsets.bottom
+            card.center = CGPoint(x: root.bounds.midX, y: root.bounds.height - 28 - bottomInset - card.frame.height / 2)
         } else {
             card.center = CGPoint(x: root.bounds.midX, y: root.bounds.midY)
         }
