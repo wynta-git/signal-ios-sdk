@@ -2,6 +2,14 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.8.2
+
+- Push `standard` and `branded` templates: rich image support. `image_url` is downloaded by
+  the Notification Service Extension (`PushNotificationExtensionHelper`) and shown full width
+  above the title/body in the expanded Content Extension UI; the OS collapsed banner shows it
+  as a thumbnail. No image (or a failed download) leaves the plain title/body layout.
+- `branded` no longer shows an image beside the text — `image_url` is now the rich image.
+
 ## 1.8.1
 
 - Removed `showTestInAppMessage` — it was always a dev-only bypass (skips inbox fetch/trigger
