@@ -6,7 +6,7 @@ import UserNotifications
 /// target is a thin shell that calls `populate(request:bestAttemptContent:contentHandler:)`
 /// from `didReceive(_:withContentHandler:)`.
 ///
-/// Downloads `imageUrl` for `hero_banner` pushes and attaches it via `UNNotificationAttachment`
+/// Downloads `imageUrl` for `hero_banner` pushes (or the rich image for `standard`/`branded`) and attaches it via `UNNotificationAttachment`
 /// so both the default OS banner and the Content Extension (`PushNotificationContentViewController`)
 /// can show it — the Content Extension reuses this attachment rather than downloading again.
 ///
@@ -62,13 +62,14 @@ public final class PushNotificationExtensionHelper {
             return
         }
 
-        // hero_banner's full-bleed image and branded's optional large icon are the only two
-        // images either template needs — download whichever one this payload calls for here,
+        // hero_banner's full-bleed image and the standard/branded rich image are the only
+        // images the templates need — download whichever one this payload calls for here,
         // so the Content Extension can reuse the attachment instead of fetching it again.
+        // (Attaching also gives the OS collapsed banner its thumbnail.)
         let (attachmentId, imageUrlString): (String, String?) = {
             switch payload.template {
             case "hero_banner": return ("hero_image", payload.imageUrl)
-            case "branded": return ("large_icon", payload.largeIconUrl)
+            case "standard", "branded": return ("rich_image", payload.richImageUrl)
             default: return ("", nil)
             }
         }()

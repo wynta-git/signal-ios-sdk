@@ -8,10 +8,12 @@ internal struct PushNotificationPayload {
     let title: String
     let body: String
     let accentColorHex: String?
-    let largeIconUrl: String?
     let imageUrl: String?
+    // The composer's "Add a rich image" — full-width image above the title/body on the
+    // "standard" and "branded" templates only (hero_banner has its own imageUrl).
+    let richImageUrl: String?
     // Overrides the title/body text color on all three templates — unlike accentColorHex/
-    // largeIconUrl/imageUrl, not scoped to a single template.
+    // imageUrl/richImageUrl, not scoped to a single template.
     let textColor: String?
     let notificationTapType: String?
     let notificationTapAction1: String?
@@ -42,11 +44,13 @@ internal struct PushNotificationPayload {
             template: (string("template") ?? "standard").lowercased(),
             title: title,
             body: body,
-            // bg_color/image_url/banner_url are the current composer field names;
-            // accentColorHex/largeIconUrl/imageUrl kept as fallbacks for the same reason.
+            // bg_color/banner_url are the current composer field names;
+            // accentColorHex/imageUrl kept as fallbacks for the same reason.
             accentColorHex: string("bg_color") ?? string("accentColorHex"),
-            largeIconUrl: string("image_url") ?? string("largeIconUrl"),
             imageUrl: string("banner_url") ?? string("imageUrl"),
+            // image_url used to be the branded large icon beside the text; branded no longer
+            // has one — the composer now sends the rich image as image_url.
+            richImageUrl: string("image_url"),
             textColor: string("text_color"),
             // Lowercased to match the native Android SDK, where a "Dismiss"/"DEEPLINK" case
             // variance from the backend shouldn't produce two different values downstream.

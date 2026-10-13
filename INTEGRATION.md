@@ -460,7 +460,7 @@ The SDK renders campaign push notifications with custom UI — Branded gets an a
 
 | Extension | Purpose | Runs when |
 |---|---|---|
-| **Notification Service Extension (NSE)** | Downloads `banner_url`/`image_url` and attaches them to the notification before it's shown | Every push, pre-display |
+| **Notification Service Extension (NSE)** | Downloads `banner_url` or the rich image (`image_url`) and attaches it to the notification before it's shown | Every push, pre-display |
 | **Notification Content Extension** | Draws the actual custom UI (accent color, full-bleed image) | Only in the **expanded** state (long-press / pull-down) — the collapsed banner is always OS-standard, no SDK can change that |
 
 ### 8.1 Notification Service Extension
@@ -499,7 +499,7 @@ class NotificationService: UNNotificationServiceExtension {
 }
 ```
 
-`populate` downloads the relevant image for the template (`banner_url` for `hero_banner`, `image_url` for `branded`), attaches it, and sets `categoryIdentifier` so the OS routes to the Content Extension below. On any failure (timeout, bad URL, oversized image) it calls `contentHandler` with the content unchanged — the push still shows, just without the SDK's custom UI.
+`populate` downloads the relevant image for the template (`banner_url` for `hero_banner`, `image_url` for `standard`/`branded`), attaches it, and sets `categoryIdentifier` so the OS routes to the Content Extension below. On any failure (timeout, bad URL, oversized image) it calls `contentHandler` with the content unchanged — the push still shows, just without the SDK's custom UI.
 
 ### 8.2 Notification Content Extension
 
@@ -533,9 +533,9 @@ The category string (`wynta_rich_push` above) is arbitrary but must exactly matc
 | `template` | all | `"standard"` \| `"branded"` \| `"hero_banner"` (case-insensitive; unrecognized values fall back to `standard`) |
 | `title` / `content` | all | Required — the notification text. `content` is the current field name for the body text; `body` is still accepted as a fallback for older campaigns |
 | `bg_color` | `branded` only | e.g. `"#3A4CE0"` — fills the card background, ignored for other templates. `accentColorHex` is still accepted as a fallback |
-| `image_url` | `branded` only | Small icon shown alongside the card, ignored for other templates. `largeIconUrl` is still accepted as a fallback |
+| `image_url` | `standard`, `branded` | "Add a rich image": shown full width above the title/body in the expanded Content Extension UI; the OS collapsed banner shows it as a thumbnail. If absent or the download fails, the push shows without an image. Branded no longer shows an icon beside the text |
 | `banner_url` | `hero_banner` only | Full-bleed image with an overlaid title/body; falls back to the `standard` layout if the download fails or the field is absent. `imageUrl` is still accepted as a fallback |
-| `text_color` | all | e.g. `"#FFFFFF"` — overrides the title/body text color on all three templates in the expanded Content Extension UI (unlike `bg_color`/`image_url`/`banner_url`, not scoped to one template). Ignored if invalid/absent, in which case each template's default text color applies. Has no effect on the OS-standard collapsed banner |
+| `text_color` | all | e.g. `"#FFFFFF"` — overrides the title/body text color on all three templates in the expanded Content Extension UI (unlike `bg_color`/`banner_url`/the rich image, not scoped to one template). Ignored if invalid/absent, in which case each template's default text color applies. Has no effect on the OS-standard collapsed banner |
 | `notification_tap_type` | all | `"dismiss"` \| `"deeplink"` \| `"share"` \| `"call"` \| `"track_event"` — see [8.6](#86-tap-handling--deep-links) |
 | `notification_tap_action_1` / `notification_tap_action_2` | all | Opaque strings the app interprets based on `notification_tap_type` (e.g. a deep-link screen name) |
 

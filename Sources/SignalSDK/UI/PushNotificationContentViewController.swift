@@ -10,9 +10,9 @@ import UserNotificationsUI
 /// `SignalSDK.pushCategoryIdentifier` so iOS routes matching pushes here on expand.
 ///
 /// Mirrors the composer's three templates, matching the Android SDK's final rendering:
-///   - `standard`: plain title/body, no color, no image.
+///   - `standard`: plain title/body, no color, with an optional rich image above the text.
 ///   - `branded`: the whole card is filled with `accentColorHex`, rounded corners, with an
-///     optional small `largeIconUrl` icon at the trailing edge.
+///     optional rich image above the text (no image beside the text).
 ///   - `hero_banner`: the image fills the card edge-to-edge at its own aspect ratio (no fixed
 ///     height, so it isn't cropped), with title/body overlaid in white directly at the bottom.
 /// The collapsed banner is always OS-standard regardless of what's drawn here — only the
@@ -28,14 +28,20 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
     // own aspect ratio instead of being stretched taller and cropped more.
     private static let minHeroHeight: CGFloat = 90
     private static let maxHeroHeight: CGFloat = 220
-    private static let largeIconSize: CGFloat = 44
+    // Rich image (standard/branded): inset inside the card, sized to its own aspect ratio,
+    // capped so title/body still fit — same 160 cap as the Android layouts.
+    private static let richImageInset: CGFloat = 12
+    private static let richImageCornerRadius: CGFloat = 8
+    private static let maxRichImageHeight: CGFloat = 160
 
     private let imageView = UIImageView()
-    private let largeIconView = UIImageView()
+    private let richImageView = UIImageView()
     private let titleLabel = UILabel()
     private let bodyLabel = UILabel()
 
     private var imageHeightConstraint: NSLayoutConstraint!
+    private var richImageTopConstraint: NSLayoutConstraint!
+    private var richImageHeightConstraint: NSLayoutConstraint!
     private var textStackNormalConstraints: [NSLayoutConstraint] = []
     private var textStackOverlayConstraints: [NSLayoutConstraint] = []
 
@@ -58,8 +64,10 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
         // Reset — didReceive can be called more than once for the same extension instance.
         view.backgroundColor = .clear
         imageView.image = nil
-        largeIconView.image = nil
-        largeIconView.isHidden = true
+        richImageView.image = nil
+        richImageView.isHidden = true
+        richImageTopConstraint.constant = 0
+        richImageHeightConstraint.constant = 0
         imageHeightConstraint.constant = 0
         titleLabel.textColor = .label
         bodyLabel.textColor = .secondaryLabel
@@ -79,10 +87,7 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
             // device's system theme, so its text can't rely on system-theme-aware colors either.
             titleLabel.textColor = .black
             bodyLabel.textColor = .black
-            if let icon = attachedImage(in: notification, identifier: "large_icon") {
-                largeIconView.image = icon
-                largeIconView.isHidden = false
-            }
+            showRichImage(in: notification)
 
         case "hero_banner":
             guard let image = attachedImage(in: notification, identifier: "hero_image") else {
@@ -103,10 +108,10 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
             NSLayoutConstraint.activate(textStackOverlayConstraints)
 
         default:
-            break // "standard" — plain title/body layout, nothing further to configure
+            showRichImage(in: notification) // "standard" — title/body, plus the rich image if any
         }
 
-        // Applied after the per-template switch, unlike accentColorHex/largeIconUrl/imageUrl,
+        // Applied after the per-template switch, unlike accentColorHex/imageUrl/richImageUrl,
         // so text_color overrides the default title/body color on all three templates rather
         // than being scoped to one.
         if let hex = payload?.textColor, let color = UIColor(hex: hex) {
@@ -124,17 +129,17 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
 
     private func buildLayout() {
         imageView.translatesAutoresizingMaskIntoConstraints = false
-        largeIconView.translatesAutoresizingMaskIntoConstraints = false
+        richImageView.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         bodyLabel.translatesAutoresizingMaskIntoConstraints = false
 
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
 
-        largeIconView.contentMode = .scaleAspectFill
-        largeIconView.clipsToBounds = true
-        largeIconView.layer.cornerRadius = 6
-        largeIconView.isHidden = true
+        richImageView.contentMode = .scaleAspectFill
+        richImageView.clipsToBounds = true
+        richImageView.layer.cornerRadius = Self.richImageCornerRadius
+        richImageView.isHidden = true
 
         titleLabel.font = .boldSystemFont(ofSize: 15)
         titleLabel.numberOfLines = 2
@@ -148,10 +153,13 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
         view.addSubview(imageView)
-        view.addSubview(largeIconView)
+        view.addSubview(richImageView)
         view.addSubview(textStack)
 
         imageHeightConstraint = imageView.heightAnchor.constraint(equalToConstant: 0)
+        // Both 0 while there's no rich image, so the text sits exactly where it did before.
+        richImageTopConstraint = richImageView.topAnchor.constraint(equalTo: imageView.bottomAnchor)
+        richImageHeightConstraint = richImageView.heightAnchor.constraint(equalToConstant: 0)
 
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -159,20 +167,20 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
             imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             imageHeightConstraint,
 
-            largeIconView.centerYAnchor.constraint(equalTo: textStack.centerYAnchor),
-            largeIconView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            largeIconView.widthAnchor.constraint(equalToConstant: Self.largeIconSize),
-            largeIconView.heightAnchor.constraint(equalToConstant: Self.largeIconSize),
+            richImageTopConstraint,
+            richImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Self.richImageInset),
+            richImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Self.richImageInset),
+            richImageHeightConstraint,
 
             textStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             textStack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -12)
         ])
 
-        // "standard"/"branded" — text sits in normal document flow below the (zero-height,
-        // unless branded shows a large icon's row) image area, trailing edge clear of the icon.
+        // "standard"/"branded" — text sits in normal document flow below the rich image
+        // (zero-height when there isn't one).
         textStackNormalConstraints = [
-            textStack.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 12),
-            textStack.trailingAnchor.constraint(lessThanOrEqualTo: largeIconView.leadingAnchor, constant: -12)
+            textStack.topAnchor.constraint(equalTo: richImageView.bottomAnchor, constant: 12),
+            textStack.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -16)
         ]
 
         // "hero_banner" — text overlays the bottom of the image instead of flowing below it.
@@ -182,6 +190,19 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
         ]
 
         NSLayoutConstraint.activate(textStackNormalConstraints)
+    }
+
+    // Standard/branded rich image, attached by PushNotificationExtensionHelper. Missing
+    // attachment (no image, or the download failed) leaves the plain title/body layout.
+    private func showRichImage(in notification: UNNotification) {
+        guard let image = attachedImage(in: notification, identifier: "rich_image"),
+              image.size.width > 0 else { return }
+        richImageView.image = image
+        richImageView.isHidden = false
+        let cardWidth = view.bounds.width > 0 ? view.bounds.width : 320
+        let width = cardWidth - 2 * Self.richImageInset
+        richImageTopConstraint.constant = Self.richImageInset
+        richImageHeightConstraint.constant = min(width * image.size.height / image.size.width, Self.maxRichImageHeight)
     }
 
     private func attachedImage(in notification: UNNotification, identifier: String) -> UIImage? {
