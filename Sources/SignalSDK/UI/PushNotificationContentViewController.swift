@@ -119,9 +119,16 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
             bodyLabel.textColor = color
         }
 
+        // Measured at the real card width — an unconstrained compressed-size fit lets the labels
+        // lay out on one line and under-reports the height.
+        let width = view.bounds.width > 0 ? view.bounds.width : 320
         preferredContentSize = CGSize(
-            width: view.bounds.width,
-            height: view.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height
+            width: width,
+            height: view.systemLayoutSizeFitting(
+                CGSize(width: width, height: UIView.layoutFittingCompressedSize.height),
+                withHorizontalFittingPriority: .required,
+                verticalFittingPriority: .fittingSizeLevel
+            ).height
         )
     }
 
@@ -184,7 +191,11 @@ open class PushNotificationContentViewController: UIViewController, UNNotificati
         ]
 
         // "hero_banner" — text overlays the bottom of the image instead of flowing below it.
+        // The card's bottom is the image's bottom: without this, nothing ties the image to the
+        // card's height, so the card was sized to the text alone and showed only a thin strip
+        // of the banner (the image overflowed below and was clipped).
         textStackOverlayConstraints = [
+            view.bottomAnchor.constraint(equalTo: imageView.bottomAnchor),
             textStack.topAnchor.constraint(greaterThanOrEqualTo: imageView.topAnchor, constant: 12),
             textStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16)
         ]
