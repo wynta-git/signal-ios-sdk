@@ -2,6 +2,12 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.8.4
+
+- In-app browser (`external_url` CTA): web pages keep loading in the web view as before;
+  links a web view can't open (`itms-apps://`, `intent://`, `tel:`, `mailto:`, `upi:` ...) are
+  now handed to iOS to open in the right app instead of failing.
+
 ## 1.8.3
 
 - `hero_banner` expanded view (long-press): fixed the card showing only a thin strip of the
