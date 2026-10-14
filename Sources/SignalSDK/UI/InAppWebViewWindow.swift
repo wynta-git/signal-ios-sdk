@@ -51,6 +51,7 @@ internal final class InAppWebViewWindow: NSObject {
             width: root.bounds.width, height: root.bounds.height - barHeight
         ))
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        webView.navigationDelegate = self
         webView.load(URLRequest(url: url))
         root.addSubview(webView)
 
@@ -86,5 +87,27 @@ internal final class InAppWebViewWindow: NSObject {
         overlayWindow?.isHidden = true
         overlayWindow = nil
         Self.current = nil
+    }
+}
+
+// http/https (and the WebView's own about:/data:/blob:) keep loading here. Anything else —
+// itms-apps:// (an App Store page's "open in app"), intent://, tel:, mailto:, upi: — can't be
+// shown by a WKWebView, so it's handed to iOS to open in the right app; the web view stays as is.
+extension InAppWebViewWindow: WKNavigationDelegate {
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+    ) {
+        guard let url = navigationAction.request.url,
+              let scheme = url.scheme?.lowercased(),
+              !["http", "https", "about", "data", "blob"].contains(scheme) else {
+            decisionHandler(.allow)
+            return
+        }
+        decisionHandler(.cancel)
+        UIApplication.shared.open(url, options: [:]) { opened in
+            if !opened { Logger.log("InAppWebViewWindow: no app can open \(scheme): link") }
+        }
     }
 }
