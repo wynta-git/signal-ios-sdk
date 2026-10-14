@@ -2,6 +2,14 @@
 
 All notable changes to the Signal iOS SDK are documented here.
 
+## 1.8.3
+
+- `hero_banner` expanded view (long-press): fixed the card showing only a thin strip of the
+  banner. The image wasn't tied to the card's bottom, so the card was sized to the overlaid
+  text alone; it's now sized to the image at its own aspect ratio, matching Android.
+- Expanded height is measured at the real card width, so a multi-line title/body isn't
+  under-measured on any template.
+
 ## 1.8.2
 
 - Push `standard` and `branded` templates: rich image support. `image_url` is downloaded by
